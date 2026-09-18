@@ -19,7 +19,7 @@ public class ItemFactory {
     public static final String ID_9MM_AMMO = "9mm_ammo";
 
     /**
-     * Crea la Glock (balestra con CustomModelData 11), senza caricatore inserito.
+     * Crea la Glock (balestra con CustomModelData 11), con caricatore inserito.
      */
     public static ItemStack createGlock() {
         ItemStack item = new ItemStack(Material.CROSSBOW);
