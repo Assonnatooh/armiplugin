@@ -16,7 +16,7 @@ public class ArmiPlugin extends JavaPlugin {
         Keys.init(this);
 
         getServer().getPluginManager().registerEvents(new GUIListener(), this);
-        getServer().getPluginManager().registerEvents(new WeaponListener(BODY_DAMAGE, HEAD_DAMAGE), this);
+        getServer().getPluginManager().registerEvents(new WeaponListener(this, BODY_DAMAGE, HEAD_DAMAGE), this);
 
         getLogger().info("ArmiPlugin abilitato! Danni: corpo=" + BODY_DAMAGE + " testa=" + HEAD_DAMAGE);
     }
