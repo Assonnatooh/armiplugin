@@ -21,7 +21,7 @@ public class ArmiGUI {
 
         gui.setItem(SLOT_GLOCK, ItemFactory.createGlock());
         gui.setItem(SLOT_CARICATORE, ItemFactory.createCaricatoreGlock(0));
-        gui.setItem(SLOT_MUNIZIONI, ItemFactory.createMunizioni9mm(30));
+        gui.setItem(SLOT_MUNIZIONI, ItemFactory.createMunizioni9mm(64));
 
         player.openInventory(gui);
     }
