@@ -1,0 +1,11 @@
+name: ArmiPlugin
+version: '1.0.0'
+main: com.armiplugin.ArmiPlugin
+api-version: '1.20'
+author: Te
+description: Plugin di armi da fuoco custom (Glock)
+
+commands:
+  armi:
+    description: Apre il menu per prendere le armi
+    usage: /armi
