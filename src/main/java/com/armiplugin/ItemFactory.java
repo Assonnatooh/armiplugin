@@ -12,7 +12,7 @@ import java.util.List;
 public class ItemFactory {
 
     // Capacità massima del caricatore della Glock. Modifica questo valore se vuoi.
-    public static final int GLOCK_MAG_CAPACITY = 15;
+    public static final int GLOCK_MAG_CAPACITY = 17;
 
     public static final String ID_GLOCK_WEAPON = "glock_weapon";
     public static final String ID_GLOCK_MAGAZINE = "glock_magazine";
