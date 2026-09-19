@@ -45,6 +45,16 @@ public class GUIListener implements Listener {
                     player.sendMessage("§aHai ricevuto un Caricatore 92FS!");
                     break;
 
+                // BERETTA PX4 (Terza Riga)
+                case ArmiGUI.SLOT_PX4:
+                    giveOrDrop(player, ItemFactory.createBerettaPx4());
+                    player.sendMessage("§aHai ricevuto una Beretta PX4!");
+                    break;
+                case ArmiGUI.SLOT_CARICATORE_PX4:
+                    giveOrDrop(player, ItemFactory.createCaricatorePx4(0));
+                    player.sendMessage("§aHai ricevuto un Caricatore PX4!");
+                    break;
+
                 default:
                     break;
             }
