@@ -14,13 +14,13 @@ public class ItemFactory {
     public static final int GLOCK_MAG_CAPACITY = 17;
     public static final int BERETTA_MAG_CAPACITY = 15;
 
-    // --- GLOCK ---
+    // --- GLOCK 17 ---
     public static ItemStack createGlock() {
         ItemStack item = new ItemStack(Material.CROSSBOW);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Glock 17");
-            meta.setCustomModelData(7);
+            meta.setCustomModelData(11); // Balestra CMD 11
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_weapon");
             meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
 
@@ -36,11 +36,11 @@ public class ItemFactory {
     }
 
     public static ItemStack createCaricatoreGlock(int ammo) {
-        ItemStack item = new ItemStack(Material.BRICK);
+        ItemStack item = new ItemStack(Material.STICK);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.YELLOW + "Caricatore Glock");
-            meta.setCustomModelData(393);
+            meta.setCustomModelData(394); // Stick CMD 394
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_magazine");
             meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
@@ -60,7 +60,7 @@ public class ItemFactory {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Beretta 92FS");
-            meta.setCustomModelData(8);
+            meta.setCustomModelData(8); // Balestra CMD 8
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_weapon");
             meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
 
@@ -76,11 +76,11 @@ public class ItemFactory {
     }
 
     public static ItemStack createCaricatoreBeretta(int ammo) {
-        ItemStack item = new ItemStack(Material.BRICK);
+        ItemStack item = new ItemStack(Material.STICK);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.YELLOW + "Caricatore 92FS");
-            meta.setCustomModelData(394); // Cambiati qui i CustomModelData a 394
+            meta.setCustomModelData(394); // Stick CMD 394
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_magazine");
             meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
@@ -96,11 +96,11 @@ public class ItemFactory {
 
     // --- MUNIZIONI ---
     public static ItemStack createMunizioni9mm(int amount) {
-        ItemStack item = new ItemStack(Material.FLINT, amount);
+        ItemStack item = new ItemStack(Material.STICK, amount);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.WHITE + "Munizioni 9mm");
-            meta.setCustomModelData(101);
+            meta.setCustomModelData(91); // Stick CMD 91
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "9mm_ammo");
             item.setItemMeta(meta);
         }
@@ -109,11 +109,11 @@ public class ItemFactory {
 
     // --- MIRINI (ADS) ---
     public static ItemStack createSightItem() {
-        ItemStack item = new ItemStack(Material.WARPED_FUNGUS_ON_A_STICK);
+        ItemStack item = new ItemStack(Material.CROSSBOW);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Glock 17 (Mirino)");
-            meta.setCustomModelData(7);
+            meta.setCustomModelData(100); // Balestra CMD 100
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_sight");
             item.setItemMeta(meta);
         }
@@ -121,11 +121,11 @@ public class ItemFactory {
     }
 
     public static ItemStack createBerettaSightItem() {
-        ItemStack item = new ItemStack(Material.WARPED_FUNGUS_ON_A_STICK);
+        ItemStack item = new ItemStack(Material.CROSSBOW);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Beretta 92FS (Mirino)");
-            meta.setCustomModelData(8);
+            meta.setCustomModelData(100); // Balestra CMD 100
             meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_sight");
             item.setItemMeta(meta);
         }
