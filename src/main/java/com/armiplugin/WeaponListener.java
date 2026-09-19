@@ -248,7 +248,6 @@ public class WeaponListener implements Listener {
         if (weapon == null) return;
 
         if (!player.isSneaking()) {
-            player.sendActionBar("§cDevi essere accovacciato per sparare!");
             return;
         }
 
@@ -263,7 +262,7 @@ public class WeaponListener implements Listener {
 
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
         if (hasMag != 1) {
-            player.sendActionBar("§cNessun caricatore inserito!");
+          
             playEmptySound(player);
             return;
         }
@@ -320,9 +319,7 @@ public class WeaponListener implements Listener {
         target.damage(damage, player);
 
         if (headshot) {
-            player.sendActionBar("§6§lHEADSHOT! §7(" + damage + " danni)");
-        } else {
-            player.sendActionBar("§7Colpito (" + damage + " danni)");
+        
         }
     }
 
