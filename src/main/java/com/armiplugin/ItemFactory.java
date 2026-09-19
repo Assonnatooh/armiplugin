@@ -11,15 +11,16 @@ import java.util.List;
 
 public class ItemFactory {
 
-    // Capacità massima del caricatore della Glock. Modifica questo valore se vuoi.
+    // Capacità massima del caricatore della Glock.
     public static final int GLOCK_MAG_CAPACITY = 17;
 
     public static final String ID_GLOCK_WEAPON = "glock_weapon";
     public static final String ID_GLOCK_MAGAZINE = "glock_magazine";
     public static final String ID_9MM_AMMO = "9mm_ammo";
+    public static final String ID_GLOCK_SIGHT = "glock_sight";
 
     /**
-     * Crea la Glock (balestra con CustomModelData 11), con caricatore inserito.
+     * Crea la Glock (balestra con CustomModelData 11), senza caricatore inserito.
      */
     public static ItemStack createGlock() {
         ItemStack item = new ItemStack(Material.CROSSBOW);
@@ -82,6 +83,24 @@ public class ItemFactory {
         return item;
     }
 
+    /**
+     * Item "mirino": balestra con CustomModelData 100, mostrato nella mano principale
+     * al posto della Glock quando il giocatore è in mira (accovacciato).
+     * Puramente visivo: non spara, non è ottenibile dalla GUI.
+     */
+    public static ItemStack createSightItem() {
+        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemMeta meta = item.getItemMeta();
+
+        meta.setDisplayName(ChatColor.DARK_GRAY + "In mira...");
+        meta.setCustomModelData(100);
+
+        meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, ID_GLOCK_SIGHT);
+
+        item.setItemMeta(meta);
+        return item;
+    }
+
     // ---- Metodi di utilità per riconoscere gli item ----
 
     public static boolean isGlock(ItemStack item) {
@@ -94,6 +113,10 @@ public class ItemFactory {
 
     public static boolean isMunizioni9mm(ItemStack item) {
         return hasId(item, ID_9MM_AMMO);
+    }
+
+    public static boolean isSightItem(ItemStack item) {
+        return hasId(item, ID_GLOCK_SIGHT);
     }
 
     private static boolean hasId(ItemStack item, String id) {
