@@ -20,9 +20,8 @@ public class ItemFactory {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Glock 17");
-            meta.setCustomModelData(7); // CMD Glock
-            meta.getPersistentDataContainer().set(Keys.IS_WEAPON, PersistentDataType.BYTE, (byte) 1);
-            meta.getPersistentDataContainer().set(Keys.WEAPON_TYPE, PersistentDataType.STRING, "GLOCK");
+            meta.setCustomModelData(7);
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_weapon");
             meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
 
             List<String> lore = new ArrayList<>();
@@ -41,9 +40,8 @@ public class ItemFactory {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.YELLOW + "Caricatore Glock");
-            meta.setCustomModelData(393); // CMD Caricatore Glock
-            meta.getPersistentDataContainer().set(Keys.IS_MAGAZINE, PersistentDataType.BYTE, (byte) 1);
-            meta.getPersistentDataContainer().set(Keys.MAG_TYPE, PersistentDataType.STRING, "GLOCK");
+            meta.setCustomModelData(393);
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_magazine");
             meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
             List<String> lore = new ArrayList<>();
@@ -62,9 +60,8 @@ public class ItemFactory {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Beretta 92FS");
-            meta.setCustomModelData(8); // CMD Beretta
-            meta.getPersistentDataContainer().set(Keys.IS_WEAPON, PersistentDataType.BYTE, (byte) 1);
-            meta.getPersistentDataContainer().set(Keys.WEAPON_TYPE, PersistentDataType.STRING, "BERETTA");
+            meta.setCustomModelData(8);
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_weapon");
             meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
 
             List<String> lore = new ArrayList<>();
@@ -83,9 +80,8 @@ public class ItemFactory {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.YELLOW + "Caricatore 92FS");
-            meta.setCustomModelData(394); // Cambiato a 394!
-            meta.getPersistentDataContainer().set(Keys.IS_MAGAZINE, PersistentDataType.BYTE, (byte) 1);
-            meta.getPersistentDataContainer().set(Keys.MAG_TYPE, PersistentDataType.STRING, "BERETTA");
+            meta.setCustomModelData(394); // Cambiati qui i CustomModelData a 394
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_magazine");
             meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
             List<String> lore = new ArrayList<>();
@@ -105,7 +101,7 @@ public class ItemFactory {
         if (meta != null) {
             meta.setDisplayName(ChatColor.WHITE + "Munizioni 9mm");
             meta.setCustomModelData(101);
-            meta.getPersistentDataContainer().set(Keys.IS_AMMO, PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "9mm_ammo");
             item.setItemMeta(meta);
         }
         return item;
@@ -118,7 +114,7 @@ public class ItemFactory {
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Glock 17 (Mirino)");
             meta.setCustomModelData(7);
-            meta.getPersistentDataContainer().set(Keys.IS_SIGHT, PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_sight");
             item.setItemMeta(meta);
         }
         return item;
@@ -130,7 +126,7 @@ public class ItemFactory {
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + "Beretta 92FS (Mirino)");
             meta.setCustomModelData(8);
-            meta.getPersistentDataContainer().set(Keys.IS_SIGHT, PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_sight");
             item.setItemMeta(meta);
         }
         return item;
@@ -138,48 +134,37 @@ public class ItemFactory {
 
     // --- CONTROLLI E VERIFICHE ---
     public static boolean isGlock(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        ItemMeta meta = item.getItemMeta();
-        String type = meta.getPersistentDataContainer().get(Keys.WEAPON_TYPE, PersistentDataType.STRING);
-        return "GLOCK".equals(type);
+        return isMatch(item, "glock_weapon");
     }
 
     public static boolean isBeretta(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        ItemMeta meta = item.getItemMeta();
-        String type = meta.getPersistentDataContainer().get(Keys.WEAPON_TYPE, PersistentDataType.STRING);
-        return "BERETTA".equals(type);
+        return isMatch(item, "beretta_weapon");
     }
 
     public static boolean isCaricatoreGlock(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        ItemMeta meta = item.getItemMeta();
-        String type = meta.getPersistentDataContainer().get(Keys.MAG_TYPE, PersistentDataType.STRING);
-        return "GLOCK".equals(type);
+        return isMatch(item, "glock_magazine");
     }
 
     public static boolean isCaricatoreBeretta(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        ItemMeta meta = item.getItemMeta();
-        String type = meta.getPersistentDataContainer().get(Keys.MAG_TYPE, PersistentDataType.STRING);
-        return "BERETTA".equals(type);
+        return isMatch(item, "beretta_magazine");
     }
 
     public static boolean isMunizioni9mm(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        ItemMeta meta = item.getItemMeta();
-        Byte isAmmo = meta.getPersistentDataContainer().get(Keys.IS_AMMO, PersistentDataType.BYTE);
-        return isAmmo != null && isAmmo == 1;
+        return isMatch(item, "9mm_ammo");
     }
 
     public static boolean isSightItem(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
-        ItemMeta meta = item.getItemMeta();
-        Byte isSight = meta.getPersistentDataContainer().get(Keys.IS_SIGHT, PersistentDataType.BYTE);
-        return isSight != null && isSight == 1;
+        return isMatch(item, "glock_sight");
     }
 
     public static boolean isBerettaSightItem(ItemStack item) {
-        return isSightItem(item) && item.getItemMeta().getCustomModelData() == 8;
+        return isMatch(item, "beretta_sight");
+    }
+
+    private static boolean isMatch(ItemStack item, String id) {
+        if (item == null || !item.hasItemMeta()) return false;
+        ItemMeta meta = item.getItemMeta();
+        String val = meta.getPersistentDataContainer().get(Keys.ITEM_ID, PersistentDataType.STRING);
+        return id.equals(val);
     }
 }
