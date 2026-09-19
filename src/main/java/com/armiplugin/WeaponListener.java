@@ -3,14 +3,15 @@ package com.armiplugin;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -25,15 +26,24 @@ import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public class WeaponListener implements Listener {
 
-    private static final long FIRE_COOLDOWN_MS = 250;
+    // Delay minimo tra un colpo e l'altro (richiesto: almeno 0.3s)
+    private static final long FIRE_COOLDOWN_MS = 300;
+
+    // Distanza massima di sparo
     private static final double MAX_DISTANCE = 60.0;
+
+    // Soglia (in blocchi) entro cui un colpo è considerato "alla testa"
     private static final double HEADSHOT_THRESHOLD = 0.25;
-    private static final long RELOAD_INTERVAL_TICKS = 10L;
+
+    // Ogni quanti tick viene aggiunto un colpo durante la ricarica del caricatore (4 tick = 0.2s, più veloce di prima)
+    private static final long RELOAD_INTERVAL_TICKS = 4L;
 
     private final JavaPlugin plugin;
     private final double bodyDamage;
@@ -42,11 +52,136 @@ public class WeaponListener implements Listener {
     private final HashMap<UUID, Long> lastShot = new HashMap<>();
     private final HashMap<UUID, BukkitTask> reloadTasks = new HashMap<>();
 
+    // --- Stato mira (ADS) ---
+    private final Set<UUID> aimingPlayers = new HashSet<>();
+    private final HashMap<UUID, AimState> aimStates = new HashMap<>();
+
+    private static class AimState {
+        final int slot;
+        final ItemStack originalOffhand;
+
+        AimState(int slot, ItemStack originalOffhand) {
+            this.slot = slot;
+            this.originalOffhand = originalOffhand;
+        }
+    }
+
     public WeaponListener(JavaPlugin plugin, double bodyDamage, double headDamage) {
         this.plugin = plugin;
         this.bodyDamage = bodyDamage;
         this.headDamage = headDamage;
     }
+
+    // ---------------------------------------------------------------
+    // MIRA (ADS): si attiva/disattiva insieme all'accovacciarsi
+    // ---------------------------------------------------------------
+
+    @EventHandler
+    public void onSneak(PlayerToggleSneakEvent event) {
+        Player player = event.getPlayer();
+
+        if (event.isSneaking()) {
+            int slot = player.getInventory().getHeldItemSlot();
+            ItemStack main = player.getInventory().getItem(slot);
+            if (ItemFactory.isGlock(main)) {
+                startAiming(player, main, slot);
+            }
+        } else {
+            if (aimingPlayers.contains(player.getUniqueId())) {
+                stopAiming(player);
+            }
+        }
+    }
+
+    // Se il giocatore cambia slot in hotbar mentre è accovacciato, ripristiniamo e ricontrolliamo
+    @EventHandler
+    public void onItemHeld(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        UUID id = player.getUniqueId();
+
+        if (aimingPlayers.contains(id)) {
+            stopAiming(player);
+        }
+
+        if (player.isSneaking()) {
+            ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
+            if (ItemFactory.isGlock(newItem)) {
+                startAiming(player, newItem, event.getNewSlot());
+            }
+        }
+    }
+
+    private void startAiming(Player player, ItemStack weaponItem, int slot) {
+        UUID id = player.getUniqueId();
+        if (aimingPlayers.contains(id)) return;
+
+        ItemStack offhandBefore = player.getInventory().getItemInOffHand();
+        aimStates.put(id, new AimState(slot, offhandBefore));
+
+        ItemStack weaponClone = weaponItem.clone();
+        player.getInventory().setItem(slot, ItemFactory.createSightItem());
+        player.getInventory().setItemInOffHand(weaponClone);
+
+        aimingPlayers.add(id);
+    }
+
+    private void stopAiming(Player player) {
+        UUID id = player.getUniqueId();
+        AimState state = aimStates.remove(id);
+        aimingPlayers.remove(id);
+        if (state == null) return;
+
+        ItemStack offhandNow = player.getInventory().getItemInOffHand();
+        ItemStack atSlot = player.getInventory().getItem(state.slot);
+
+        if (ItemFactory.isGlock(offhandNow) && ItemFactory.isSightItem(atSlot)) {
+            // caso normale: rimettiamo l'arma nello slot originale e ripristiniamo l'offhand
+            player.getInventory().setItem(state.slot, offhandNow);
+            player.getInventory().setItemInOffHand(state.originalOffhand);
+        } else {
+            // caso limite (il giocatore ha spostato gli item mentre mirava): best-effort
+            if (ItemFactory.isGlock(offhandNow)) {
+                giveOrDrop(player, offhandNow);
+                player.getInventory().setItemInOffHand(state.originalOffhand);
+            }
+            if (ItemFactory.isSightItem(atSlot)) {
+                player.getInventory().setItem(state.slot, null);
+            }
+        }
+    }
+
+    private boolean isAiming(Player player) {
+        return aimingPlayers.contains(player.getUniqueId());
+    }
+
+    /** Ritorna l'ItemStack dell'arma attualmente "attiva" (mano principale normalmente, mano secondaria se in mira). */
+    private ItemStack getActiveWeapon(Player player) {
+        if (isAiming(player)) {
+            ItemStack off = player.getInventory().getItemInOffHand();
+            return ItemFactory.isGlock(off) ? off : null;
+        } else {
+            ItemStack main = player.getInventory().getItemInMainHand();
+            return ItemFactory.isGlock(main) ? main : null;
+        }
+    }
+
+    private void saveActiveWeapon(Player player, ItemStack weapon) {
+        if (isAiming(player)) {
+            player.getInventory().setItemInOffHand(weapon);
+        } else {
+            player.getInventory().setItemInMainHand(weapon);
+        }
+    }
+
+    private boolean isHoldingWeaponOrSight(Player player) {
+        ItemStack main = player.getInventory().getItemInMainHand();
+        if (ItemFactory.isGlock(main)) return true;
+        return isAiming(player) && ItemFactory.isSightItem(main);
+    }
+
+    // ---------------------------------------------------------------
+    // INTERAZIONI
+    // ---------------------------------------------------------------
 
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
@@ -59,9 +194,9 @@ public class WeaponListener implements Listener {
         switch (event.getAction()) {
             case LEFT_CLICK_AIR:
             case LEFT_CLICK_BLOCK:
-                if (ItemFactory.isGlock(item)) {
+                if (ItemFactory.isGlock(item) || (isAiming(player) && ItemFactory.isSightItem(item))) {
                     event.setCancelled(true);
-                    tryShoot(player, item);
+                    tryShoot(player);
                 }
                 break;
 
@@ -73,6 +208,8 @@ public class WeaponListener implements Listener {
                 } else if (ItemFactory.isCaricatoreGlock(item)) {
                     event.setCancelled(true);
                     toggleReload(player);
+                } else if (ItemFactory.isSightItem(item)) {
+                    event.setCancelled(true); // il mirino non fa nulla al tasto destro
                 }
                 break;
 
@@ -81,24 +218,35 @@ public class WeaponListener implements Listener {
         }
     }
 
+    // Left-click su un entità: non passa da PlayerInteractEvent ma da EntityDamageByEntityEvent
     @EventHandler
     public void onAttack(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player)) return;
         Player player = (Player) event.getDamager();
-        ItemStack item = player.getInventory().getItemInMainHand();
 
-        if (ItemFactory.isGlock(item)) {
+        if (isHoldingWeaponOrSight(player)) {
             event.setCancelled(true);
-            tryShoot(player, item);
+            tryShoot(player);
         }
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        stopReload(event.getPlayer().getUniqueId(), null);
+        Player player = event.getPlayer();
+        stopReload(player.getUniqueId(), null);
+        if (isAiming(player)) {
+            stopAiming(player);
+        }
     }
 
-    private void tryShoot(Player player, ItemStack weapon) {
+    // ---------------------------------------------------------------
+    // SPARO
+    // ---------------------------------------------------------------
+
+    private void tryShoot(Player player) {
+        ItemStack weapon = getActiveWeapon(player);
+        if (weapon == null) return;
+
         if (!player.isSneaking()) {
             player.sendActionBar("§cDevi essere accovacciato per sparare!");
             return;
@@ -107,7 +255,7 @@ public class WeaponListener implements Listener {
         long now = System.currentTimeMillis();
         long last = lastShot.getOrDefault(player.getUniqueId(), 0L);
         if (now - last < FIRE_COOLDOWN_MS) {
-            return;
+            return; // troppo presto, ignora il click
         }
 
         ItemMeta meta = weapon.getItemMeta();
@@ -127,10 +275,12 @@ public class WeaponListener implements Listener {
             return;
         }
 
+        // Consuma un colpo
         ammo--;
         pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
         updateWeaponLore(meta, true, ammo);
         weapon.setItemMeta(meta);
+        saveActiveWeapon(player, weapon);
 
         lastShot.put(player.getUniqueId(), now);
 
@@ -149,16 +299,18 @@ public class WeaponListener implements Listener {
                 direction,
                 MAX_DISTANCE,
                 0.25,
-                entity -> entity instanceof LivingEntity && !entity.equals(player)
+                entity -> entity instanceof Player && !entity.equals(player)
         );
 
         if (result == null || result.getHitEntity() == null) {
             return;
         }
 
-        Entity hitEntity = result.getHitEntity();
-        if (!(hitEntity instanceof LivingEntity)) return;
-        LivingEntity target = (LivingEntity) hitEntity;
+        // Danno SOLO ai giocatori, i mob non vengono colpiti
+        if (!(result.getHitEntity() instanceof Player)) {
+            return;
+        }
+        Player target = (Player) result.getHitEntity();
 
         double hitY = result.getHitPosition().getY();
         double headY = target.getEyeLocation().getY();
@@ -177,6 +329,10 @@ public class WeaponListener implements Listener {
     private void playEmptySound(Player player) {
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_CROSSBOW_LOADING_MIDDLE, 1.0f, 1.8f);
     }
+
+    // ---------------------------------------------------------------
+    // CARICATORE: inserimento / espulsione nell'arma
+    // ---------------------------------------------------------------
 
     private void toggleMagazine(Player player, ItemStack weapon) {
         ItemMeta meta = weapon.getItemMeta();
@@ -219,6 +375,10 @@ public class WeaponListener implements Listener {
             player.sendActionBar("§aCaricatore inserito! (" + ammo + "/" + ItemFactory.GLOCK_MAG_CAPACITY + ")");
         }
     }
+
+    // ---------------------------------------------------------------
+    // CARICATORE: riempimento graduale con munizioni 9mm dall'inventario
+    // ---------------------------------------------------------------
 
     private void toggleReload(Player player) {
         UUID id = player.getUniqueId();
@@ -316,6 +476,10 @@ public class WeaponListener implements Listener {
             }
         }
     }
+
+    // ---------------------------------------------------------------
+    // Utility
+    // ---------------------------------------------------------------
 
     private boolean hasAnyAmmo(Player player) {
         PlayerInventory inv = player.getInventory();
