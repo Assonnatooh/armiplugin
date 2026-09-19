@@ -2,7 +2,6 @@ package com.armiplugin;
 
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -276,13 +275,15 @@ public class WeaponListener implements Listener {
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
         if (hasMag != 1) {
             playEmptySound(player);
+            lastShot.put(player.getUniqueId(), now);
             return;
         }
 
         int ammo = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
         if (ammo <= 0) {
-            player.sendActionBar("§cCaricatore vuoto!");
+            // Suono a vuoto (click) e nessun messaggio
             playEmptySound(player);
+            lastShot.put(player.getUniqueId(), now);
             return;
         }
 
@@ -304,11 +305,10 @@ public class WeaponListener implements Listener {
         Location eye = player.getEyeLocation();
         Vector direction = eye.getDirection();
 
-        // Riproduce il suono dell'audio 'bulletlow' dal Resource Pack
+        // Suono dello sparo dal Resource Pack
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
         player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, eye.clone().add(direction.clone().multiply(0.5)), 6, 0.02, 0.02, 0.02, 0.01);
 
-        // Raytrace sia per i Giocatori che per i Mob (LivingEntity)
         RayTraceResult result = player.getWorld().rayTraceEntities(
                 eye,
                 direction,
@@ -326,21 +326,21 @@ public class WeaponListener implements Listener {
         double headY = target.getEyeLocation().getY();
         boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
 
-        // Calcolo danni
         double damage;
         if (ItemFactory.isPx4(weapon)) {
-            damage = headshot ? 2.3 : 1.6; // Danni Beretta PX4
+            damage = headshot ? 2.3 : 1.6;
         } else if (ItemFactory.isBeretta(weapon)) {
-            damage = headshot ? 1.8 : 1.2; // Danni Beretta 92FS
+            damage = headshot ? 1.8 : 1.2;
         } else {
-            damage = headshot ? defaultHeadDamage : defaultBodyDamage; // Danni Glock
+            damage = headshot ? defaultHeadDamage : defaultBodyDamage;
         }
 
         target.damage(damage, player);
     }
 
     private void playEmptySound(Player player) {
-        player.getWorld().playSound(player.getLocation(), Sound.ITEM_CROSSBOW_LOADING_MIDDLE, 1.0f, 1.8f);
+        // Suono dell'arma scarica / senza caricatore
+        player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
     }
 
     // ---------------------------------------------------------------
@@ -373,7 +373,7 @@ public class WeaponListener implements Listener {
             
             giveOrDrop(player, ejectedMag);
 
-            player.getWorld().playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_LEATHER, 1.0f, 1.2f);
+            player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
             player.sendActionBar("§7Caricatore espulso (" + ammoLeft + " colpi)");
 
         } else {
@@ -399,7 +399,7 @@ public class WeaponListener implements Listener {
 
             consumeOneOffhand(player, offhand);
 
-            player.getWorld().playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_LEATHER, 1.0f, 0.8f);
+            player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
             player.sendActionBar("§aCaricatore inserito! (" + ammo + "/" + maxCapacity + ")");
         }
     }
@@ -477,7 +477,7 @@ public class WeaponListener implements Listener {
                 currentItem.setItemMeta(magMeta);
                 player.getInventory().setItem(heldSlot, currentItem);
 
-                player.getWorld().playSound(player.getLocation(), Sound.ITEM_BUNDLE_INSERT, 1.0f, 1.8f);
+                player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.2f);
                 player.sendActionBar("§7Ricarica... " + newAmmo + "/" + maxCapacity);
 
                 if (newAmmo >= maxCapacity) {
