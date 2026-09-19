@@ -3,6 +3,7 @@ package com.armiplugin;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -111,7 +112,6 @@ public class WeaponListener implements Listener {
 
         ItemStack weaponClone = weaponItem.clone();
         
-        // Assegna il mirino corrispondente
         ItemStack sightItem;
         if (ItemFactory.isPx4(weaponItem)) {
             sightItem = ItemFactory.createPx4SightItem();
@@ -304,27 +304,29 @@ public class WeaponListener implements Listener {
         Location eye = player.getEyeLocation();
         Vector direction = eye.getDirection();
 
-        player.getWorld().playSound(eye, Sound.ITEM_CROSSBOW_SHOOT, 1.0f, 1.4f);
+        // Riproduce il suono dell'audio 'bulletlow' dal Resource Pack
+        player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
         player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, eye.clone().add(direction.clone().multiply(0.5)), 6, 0.02, 0.02, 0.02, 0.01);
 
+        // Raytrace sia per i Giocatori che per i Mob (LivingEntity)
         RayTraceResult result = player.getWorld().rayTraceEntities(
                 eye,
                 direction,
                 MAX_DISTANCE,
                 0.25,
-                entity -> entity instanceof Player && !entity.equals(player)
+                entity -> entity instanceof LivingEntity && !entity.equals(player)
         );
 
         if (result == null || result.getHitEntity() == null) return;
-        if (!(result.getHitEntity() instanceof Player)) return;
+        if (!(result.getHitEntity() instanceof LivingEntity)) return;
 
-        Player target = (Player) result.getHitEntity();
+        LivingEntity target = (LivingEntity) result.getHitEntity();
 
         double hitY = result.getHitPosition().getY();
         double headY = target.getEyeLocation().getY();
         boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
 
-        // Calcolo danni differenziati
+        // Calcolo danni
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 2.3 : 1.6; // Danni Beretta PX4
