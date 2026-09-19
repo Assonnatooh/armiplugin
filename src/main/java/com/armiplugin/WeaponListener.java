@@ -112,7 +112,14 @@ public class WeaponListener implements Listener {
         ItemStack weaponClone = weaponItem.clone();
         
         // Assegna il mirino corrispondente
-        ItemStack sightItem = ItemFactory.isBeretta(weaponItem) ? ItemFactory.createBerettaSightItem() : ItemFactory.createSightItem();
+        ItemStack sightItem;
+        if (ItemFactory.isPx4(weaponItem)) {
+            sightItem = ItemFactory.createPx4SightItem();
+        } else if (ItemFactory.isBeretta(weaponItem)) {
+            sightItem = ItemFactory.createBerettaSightItem();
+        } else {
+            sightItem = ItemFactory.createSightItem();
+        }
         
         player.getInventory().setItem(slot, sightItem);
         player.getInventory().setItemInOffHand(weaponClone);
@@ -172,15 +179,24 @@ public class WeaponListener implements Listener {
     }
 
     private boolean isAnyWeapon(ItemStack item) {
-        return ItemFactory.isGlock(item) || ItemFactory.isBeretta(item);
+        return ItemFactory.isGlock(item) || ItemFactory.isBeretta(item) || ItemFactory.isPx4(item);
     }
 
     private boolean isAnySightItem(ItemStack item) {
-        return ItemFactory.isSightItem(item) || ItemFactory.isBerettaSightItem(item);
+        return ItemFactory.isSightItem(item) || ItemFactory.isBerettaSightItem(item) || ItemFactory.isPx4SightItem(item);
     }
 
     private boolean isAnyMagazine(ItemStack item) {
-        return ItemFactory.isCaricatoreGlock(item) || ItemFactory.isCaricatoreBeretta(item);
+        return ItemFactory.isCaricatoreGlock(item) || ItemFactory.isCaricatoreBeretta(item) || ItemFactory.isCaricatorePx4(item);
+    }
+
+    private int getMaxCapacity(ItemStack weaponOrMag) {
+        if (ItemFactory.isPx4(weaponOrMag) || ItemFactory.isCaricatorePx4(weaponOrMag)) {
+            return ItemFactory.PX4_MAG_CAPACITY;
+        } else if (ItemFactory.isBeretta(weaponOrMag) || ItemFactory.isCaricatoreBeretta(weaponOrMag)) {
+            return ItemFactory.BERETTA_MAG_CAPACITY;
+        }
+        return ItemFactory.GLOCK_MAG_CAPACITY;
     }
 
     // ---------------------------------------------------------------
@@ -273,7 +289,7 @@ public class WeaponListener implements Listener {
         ammo--;
         pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
         
-        int maxCapacity = ItemFactory.isBeretta(weapon) ? ItemFactory.BERETTA_MAG_CAPACITY : ItemFactory.GLOCK_MAG_CAPACITY;
+        int maxCapacity = getMaxCapacity(weapon);
         updateWeaponLore(meta, true, ammo, maxCapacity);
         
         weapon.setItemMeta(meta);
@@ -310,10 +326,12 @@ public class WeaponListener implements Listener {
 
         // Calcolo danni differenziati
         double damage;
-        if (ItemFactory.isBeretta(weapon)) {
+        if (ItemFactory.isPx4(weapon)) {
+            damage = headshot ? 2.3 : 1.6; // Danni Beretta PX4
+        } else if (ItemFactory.isBeretta(weapon)) {
             damage = headshot ? 1.8 : 1.2; // Danni Beretta 92FS
         } else {
-            damage = headshot ? defaultHeadDamage : defaultBodyDamage; // Danni Glock predefiniti
+            damage = headshot ? defaultHeadDamage : defaultBodyDamage; // Danni Glock
         }
 
         target.damage(damage, player);
@@ -332,8 +350,7 @@ public class WeaponListener implements Listener {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
 
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
-        boolean isBeretta = ItemFactory.isBeretta(weapon);
-        int maxCapacity = isBeretta ? ItemFactory.BERETTA_MAG_CAPACITY : ItemFactory.GLOCK_MAG_CAPACITY;
+        int maxCapacity = getMaxCapacity(weapon);
 
         if (hasMag == 1) {
             int ammoLeft = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
@@ -343,7 +360,15 @@ public class WeaponListener implements Listener {
             updateWeaponLore(meta, false, 0, maxCapacity);
             weapon.setItemMeta(meta);
 
-            ItemStack ejectedMag = isBeretta ? ItemFactory.createCaricatoreBeretta(ammoLeft) : ItemFactory.createCaricatoreGlock(ammoLeft);
+            ItemStack ejectedMag;
+            if (ItemFactory.isPx4(weapon)) {
+                ejectedMag = ItemFactory.createCaricatorePx4(ammoLeft);
+            } else if (ItemFactory.isBeretta(weapon)) {
+                ejectedMag = ItemFactory.createCaricatoreBeretta(ammoLeft);
+            } else {
+                ejectedMag = ItemFactory.createCaricatoreGlock(ammoLeft);
+            }
+            
             giveOrDrop(player, ejectedMag);
 
             player.getWorld().playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_LEATHER, 1.0f, 1.2f);
@@ -352,10 +377,13 @@ public class WeaponListener implements Listener {
         } else {
             ItemStack offhand = player.getInventory().getItemInOffHand();
 
-            if (isBeretta && !ItemFactory.isCaricatoreBeretta(offhand)) {
+            if (ItemFactory.isPx4(weapon) && !ItemFactory.isCaricatorePx4(offhand)) {
+                player.sendActionBar("§cMetti un Caricatore PX4 nella mano secondaria!");
+                return;
+            } else if (ItemFactory.isBeretta(weapon) && !ItemFactory.isCaricatoreBeretta(offhand)) {
                 player.sendActionBar("§cMetti un Caricatore 92FS nella mano secondaria!");
                 return;
-            } else if (!isBeretta && !ItemFactory.isCaricatoreGlock(offhand)) {
+            } else if (ItemFactory.isGlock(weapon) && !ItemFactory.isCaricatoreGlock(offhand)) {
                 player.sendActionBar("§cMetti un Caricatore Glock nella mano secondaria!");
                 return;
             }
@@ -391,8 +419,7 @@ public class WeaponListener implements Listener {
 
         if (!isAnyMagazine(magazine)) return;
 
-        boolean isBerettaMag = ItemFactory.isCaricatoreBeretta(magazine);
-        int maxCapacity = isBerettaMag ? ItemFactory.BERETTA_MAG_CAPACITY : ItemFactory.GLOCK_MAG_CAPACITY;
+        int maxCapacity = getMaxCapacity(magazine);
 
         int current = getMagAmmo(magazine);
         if (current >= maxCapacity) {
