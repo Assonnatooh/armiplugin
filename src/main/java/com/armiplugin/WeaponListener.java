@@ -5,8 +5,11 @@ import org.bukkit.Particle;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -34,7 +37,7 @@ public class WeaponListener implements Listener {
 
     private static final long FIRE_COOLDOWN_MS = 300;
     private static final double MAX_DISTANCE = 60.0;
-    private static final double HEADSHOT_THRESHOLD = 0.25;
+    private static final double HEADSHOT_THRESHOLD = 0.35;
     private static final long RELOAD_INTERVAL_TICKS = 4L;
 
     private final JavaPlugin plugin;
@@ -178,14 +181,17 @@ public class WeaponListener implements Listener {
     }
 
     private boolean isAnyWeapon(ItemStack item) {
+        if (item == null) return false;
         return ItemFactory.isGlock(item) || ItemFactory.isBeretta(item) || ItemFactory.isPx4(item);
     }
 
     private boolean isAnySightItem(ItemStack item) {
+        if (item == null) return false;
         return ItemFactory.isSightItem(item) || ItemFactory.isBerettaSightItem(item) || ItemFactory.isPx4SightItem(item);
     }
 
     private boolean isAnyMagazine(ItemStack item) {
+        if (item == null) return false;
         return ItemFactory.isCaricatoreGlock(item) || ItemFactory.isCaricatoreBeretta(item) || ItemFactory.isCaricatorePx4(item);
     }
 
@@ -199,28 +205,30 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // INTERAZIONI
+    // INTERAZIONI E RILEVAMENTO SPARO
     // ---------------------------------------------------------------
+
+    // Cattura lo swing del braccio (indispensabile per registrare il click sinistro a vuoto)
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onArmSwing(PlayerAnimationEvent event) {
+        Player player = event.getPlayer();
+        if (isHoldingWeaponOrSight(player)) {
+            tryShoot(player);
+        }
+    }
 
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
-
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
-        if (item == null) return;
 
-        switch (event.getAction()) {
-            case LEFT_CLICK_AIR:
-            case LEFT_CLICK_BLOCK:
-                if (isAnyWeapon(item) || (isAiming(player) && isAnySightItem(item))) {
-                    event.setCancelled(true);
-                    tryShoot(player);
-                }
-                break;
-
-            case RIGHT_CLICK_AIR:
-            case RIGHT_CLICK_BLOCK:
+        if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
+            if (isHoldingWeaponOrSight(player)) {
+                event.setCancelled(true);
+                tryShoot(player);
+            }
+        } else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            if (item != null) {
                 if (isAnyWeapon(item)) {
                     event.setCancelled(true);
                     toggleMagazine(player, item);
@@ -230,10 +238,7 @@ public class WeaponListener implements Listener {
                 } else if (isAnySightItem(item)) {
                     event.setCancelled(true);
                 }
-                break;
-
-            default:
-                break;
+            }
         }
     }
 
@@ -270,6 +275,8 @@ public class WeaponListener implements Listener {
         if (now - last < FIRE_COOLDOWN_MS) return;
 
         ItemMeta meta = weapon.getItemMeta();
+        if (meta == null) return;
+        
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
 
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
@@ -281,7 +288,6 @@ public class WeaponListener implements Listener {
 
         int ammo = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
         if (ammo <= 0) {
-            // Suono a vuoto (click) e nessun messaggio
             playEmptySound(player);
             lastShot.put(player.getUniqueId(), now);
             return;
@@ -305,16 +311,25 @@ public class WeaponListener implements Listener {
         Location eye = player.getEyeLocation();
         Vector direction = eye.getDirection();
 
-        // Suono dello sparo dal Resource Pack
+        // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
-        player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, eye.clone().add(direction.clone().multiply(0.5)), 6, 0.02, 0.02, 0.02, 0.01);
 
+        // 2. Particelle Fumo Bianco (SMOKE)
+        try {
+            // Su Minecraft 1.21 / Paper il tipo standard per il fumo bianco è Particle.SMOKE
+            player.getWorld().spawnParticle(Particle.SMOKE, eye.clone().add(direction.clone().multiply(0.8)), 8, 0.05, 0.05, 0.05, 0.01);
+        } catch (Exception ignored) {
+            // Fallback nel caso la versione spigot usata specifichi WHITE_SMOKE
+            player.getWorld().spawnParticle(Particle.valueOf("WHITE_SMOKE"), eye.clone().add(direction.clone().multiply(0.8)), 8, 0.05, 0.05, 0.05, 0.01);
+        }
+
+        // 3. RayTrace per Danno (Mob & Player)
         RayTraceResult result = player.getWorld().rayTraceEntities(
                 eye,
                 direction,
                 MAX_DISTANCE,
-                0.25,
-                entity -> entity instanceof LivingEntity && !entity.equals(player)
+                0.35,
+                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
         if (result == null || result.getHitEntity() == null) return;
@@ -335,11 +350,11 @@ public class WeaponListener implements Listener {
             damage = headshot ? defaultHeadDamage : defaultBodyDamage;
         }
 
+        // Applica il danno diretto
         target.damage(damage, player);
     }
 
     private void playEmptySound(Player player) {
-        // Suono dell'arma scarica / senza caricatore
         player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
     }
 
@@ -349,6 +364,8 @@ public class WeaponListener implements Listener {
 
     private void toggleMagazine(Player player, ItemStack weapon) {
         ItemMeta meta = weapon.getItemMeta();
+        if (meta == null) return;
+
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
 
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
@@ -472,10 +489,12 @@ public class WeaponListener implements Listener {
                 int newAmmo = ammoNow + 1;
 
                 ItemMeta magMeta = currentItem.getItemMeta();
-                magMeta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, newAmmo);
-                updateMagazineLore(magMeta, newAmmo, maxCapacity);
-                currentItem.setItemMeta(magMeta);
-                player.getInventory().setItem(heldSlot, currentItem);
+                if (magMeta != null) {
+                    magMeta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, newAmmo);
+                    updateMagazineLore(magMeta, newAmmo, maxCapacity);
+                    currentItem.setItemMeta(magMeta);
+                    player.getInventory().setItem(heldSlot, currentItem);
+                }
 
                 player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.2f);
                 player.sendActionBar("§7Ricarica... " + newAmmo + "/" + maxCapacity);
@@ -532,14 +551,15 @@ public class WeaponListener implements Listener {
             }
         }
 
-        ItemStack off = inv.getItemInOffHand();
-        if (ItemFactory.isMunizioni9mm(off) && off.getAmount() > 0) {
-            off.setAmount(off.getAmount() - 1);
-            inv.setItemInOffHand(off.getAmount() <= 0 ? null : off);
+        ItemStack off warmth = inv.getItemInOffHand();
+        if (ItemFactory.isMunizioni9mm(warmth) && warmth.getAmount() > 0) {
+            warmth.setAmount(warmth.getAmount() - 1);
+            inv.setItemInOffHand(warmth.getAmount() <= 0 ? null : warmth);
         }
     }
 
     private int getMagAmmo(ItemStack magazine) {
+        if (magazine == null || magazine.getItemMeta() == null) return 0;
         ItemMeta meta = magazine.getItemMeta();
         return meta.getPersistentDataContainer().getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
     }
