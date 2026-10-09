@@ -25,8 +25,6 @@ public class ItemFactory {
         
         List<String> lore = new ArrayList<>();
         lore.add("§7Caricatore: §cNessuno");
-        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
-        lore.add("§8Tasto destro: inserisci/espelli caricatore");
         meta.setLore(lore);
 
         item.setItemMeta(meta);
@@ -43,7 +41,6 @@ public class ItemFactory {
 
         List<String> lore = new ArrayList<>();
         lore.add("§7Colpi: §f" + ammo + "/" + GLOCK_MAG_CAPACITY);
-        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
         meta.setLore(lore);
 
         item.setItemMeta(meta);
@@ -61,8 +58,6 @@ public class ItemFactory {
 
         List<String> lore = new ArrayList<>();
         lore.add("§7Caricatore: §cNessuno");
-        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
-        lore.add("§8Tasto destro: inserisci/espelli caricatore");
         meta.setLore(lore);
 
         item.setItemMeta(meta);
@@ -79,7 +74,6 @@ public class ItemFactory {
 
         List<String> lore = new ArrayList<>();
         lore.add("§7Colpi: §f" + ammo + "/" + BERETTA_MAG_CAPACITY);
-        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
         meta.setLore(lore);
 
         item.setItemMeta(meta);
@@ -97,8 +91,6 @@ public class ItemFactory {
 
         List<String> lore = new ArrayList<>();
         lore.add("§7Caricatore: §cNessuno");
-        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
-        lore.add("§8Tasto destro: inserisci/espelli caricatore");
         meta.setLore(lore);
 
         item.setItemMeta(meta);
@@ -115,7 +107,6 @@ public class ItemFactory {
 
         List<String> lore = new ArrayList<>();
         lore.add("§7Colpi: §f" + ammo + "/" + PX4_MAG_CAPACITY);
-        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
         meta.setLore(lore);
 
         item.setItemMeta(meta);
