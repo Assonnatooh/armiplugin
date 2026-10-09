@@ -7,35 +7,28 @@ import org.bukkit.inventory.Inventory;
 
 public class ArmiGUI {
 
-    // Titolo usato anche per riconoscere l'inventario nel listener dei click
     public static final String TITLE = ChatColor.DARK_GRAY + "Armeria";
 
-    // Slot Glock (Prima riga)
     public static final int SLOT_GLOCK = 10;
     public static final int SLOT_CARICATORE = 12;
     public static final int SLOT_MUNIZIONI = 14;
 
-    // Slot Beretta 92FS (Seconda riga)
     public static final int SLOT_BERETTA = 19;
     public static final int SLOT_CARICATORE_BERETTA = 21;
 
-    // Slot Beretta PX4 (Terza riga)
     public static final int SLOT_PX4 = 28;
     public static final int SLOT_CARICATORE_PX4 = 30;
 
     public static void open(Player player) {
         Inventory gui = Bukkit.createInventory(null, 45, TITLE);
 
-        // Glock 17
         gui.setItem(SLOT_GLOCK, ItemFactory.createGlock());
         gui.setItem(SLOT_CARICATORE, ItemFactory.createCaricatoreGlock(0));
         gui.setItem(SLOT_MUNIZIONI, ItemFactory.createMunizioni9mm(64));
 
-        // Beretta 92FS
         gui.setItem(SLOT_BERETTA, ItemFactory.createBeretta92FS());
         gui.setItem(SLOT_CARICATORE_BERETTA, ItemFactory.createCaricatoreBeretta(0));
 
-        // Beretta PX4
         gui.setItem(SLOT_PX4, ItemFactory.createBerettaPx4());
         gui.setItem(SLOT_CARICATORE_PX4, ItemFactory.createCaricatorePx4(0));
 
