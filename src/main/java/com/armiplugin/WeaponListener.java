@@ -149,7 +149,6 @@ public class WeaponListener implements Listener {
         return aimingPlayers.contains(player.getUniqueId());
     }
 
-    // Rileva l'arma attiva sia in mano primaria che in seconda mano durante la mira
     private ItemStack getActiveWeapon(Player player) {
         ItemStack main = player.getInventory().getItemInMainHand();
         if (isAnyWeapon(main)) return main;
@@ -265,6 +264,9 @@ public class WeaponListener implements Listener {
     // ---------------------------------------------------------------
 
     private void tryShoot(Player player) {
+        // SPARO CONSENTITO SOLO MENTRE SI È ACCOVACCIATI (SHIFT)
+        if (!player.isSneaking()) return;
+
         ItemStack weapon = getActiveWeapon(player);
         if (weapon == null) return;
 
@@ -350,17 +352,17 @@ public class WeaponListener implements Listener {
         double headY = target.getEyeLocation().getY();
         boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
 
-        // Calcolo danni dinamico in base all'arma identificata
+        // Calcolo danni preciso per arma
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 3.2 : 2.5;
         } else if (ItemFactory.isBeretta(weapon)) {
             damage = headshot ? 2.5 : 1.8;
         } else {
-            // Glock di default
             damage = headshot ? 1.8 : 1.2;
         }
 
+        // FORZATURA REGISTRAZIONE DANNO SUL BERSAGLIO
         target.setNoDamageTicks(0);
         target.damage(damage, player);
     }
@@ -499,7 +501,7 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // UTILITY
+    // UTILITY LORE (PULITA SENZA ISTRUZIONI)
     // ---------------------------------------------------------------
 
     private boolean hasAnyAmmo(Player player) {
@@ -545,15 +547,12 @@ public class WeaponListener implements Listener {
         } else {
             lore.add("§7Caricatore: §cNessuno");
         }
-        lore.add("§8Tasto sinistro: spara");
-        lore.add("§8Tasto destro: inserisci/espelli caricatore");
         meta.setLore(lore);
     }
 
     private void updateMagazineLore(ItemMeta meta, int ammo, int maxCapacity) {
         List<String> lore = new ArrayList<>();
         lore.add("§7Colpi: §f" + ammo + "/" + maxCapacity);
-        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
         meta.setLore(lore);
     }
 
