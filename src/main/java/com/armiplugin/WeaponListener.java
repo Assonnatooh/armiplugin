@@ -34,9 +34,11 @@ import java.util.UUID;
 
 public class WeaponListener implements Listener {
 
-    private static final double MAX_DISTANCE = 60.0;
+    private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
-    private static final long RELOAD_INTERVAL_TICKS = 2L;
+    
+    // 5 tick = 0.25 secondi per ogni singolo proiettile
+    private static final long RELOAD_INTERVAL_TICKS = 5L;
 
     private final JavaPlugin plugin;
 
@@ -234,7 +236,7 @@ public class WeaponListener implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onAttack(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player)) return;
         Player player = (Player) event.getDamager();
@@ -308,20 +310,31 @@ public class WeaponListener implements Listener {
 
     private void fireEffectsAndDamage(Player player, ItemStack weapon) {
         Location eye = player.getEyeLocation();
-        Vector direction = eye.getDirection();
+        Vector direction = eye.getDirection().normalize();
 
         // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // 2. Particelle Fumo Bianco
-        player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, eye.clone().add(direction.clone().multiply(0.8)), 8, 0.05, 0.05, 0.05, 0.01);
+        // 2. Limite gittata
+        double traceDist = MAX_DISTANCE;
+        RayTraceResult blockTrace = player.getWorld().rayTraceBlocks(eye, direction, MAX_DISTANCE);
+        if (blockTrace != null && blockTrace.getHitBlock() != null) {
+            traceDist = eye.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
+        }
 
-        // 3. RayTrace Danni (Mob & Player)
+        // 3. Scia visibile di fumo bianco lungo il percorso (fino a 50 blocchi)
+        for (double d = 0.5; d <= traceDist; d += 0.5) {
+            Location point = eye.clone().add(direction.clone().multiply(d));
+            player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
+        }
+
+        // 4. RayTrace entità
+        Location startTrace = eye.clone().add(direction.clone().multiply(0.5));
         RayTraceResult result = player.getWorld().rayTraceEntities(
-                eye,
+                startTrace,
                 direction,
-                MAX_DISTANCE,
-                0.35,
+                traceDist,
+                0.5,
                 entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
