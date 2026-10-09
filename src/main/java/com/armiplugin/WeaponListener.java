@@ -37,8 +37,8 @@ public class WeaponListener implements Listener {
     private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
     
-    // 5 tick = 0.25 secondi per ogni singolo proiettile
-    private static final long RELOAD_INTERVAL_TICKS = 5L;
+    // 3 tick = ~0.15s per colpo (Ricarica un pelino più veloce)
+    private static final long RELOAD_INTERVAL_TICKS = 3L;
 
     private final JavaPlugin plugin;
 
@@ -236,14 +236,20 @@ public class WeaponListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    // GESTIONE ATTACCO MELEE/MOB
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onAttack(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player)) return;
         Player player = (Player) event.getDamager();
 
         if (isHoldingWeaponOrSight(player)) {
-            event.setCancelled(true);
-            tryShoot(player);
+            // Se stiamo sparando manualmente tramite RayTrace, annulliamo solo l'attacco fisico della balestra
+            if (player.isSneaking()) {
+                event.setCancelled(true);
+                tryShoot(player);
+            } else {
+                event.setCancelled(true);
+            }
         }
     }
 
@@ -264,11 +270,12 @@ public class WeaponListener implements Listener {
         ItemStack weapon = getActiveWeapon(player);
         if (weapon == null || !player.isSneaking()) return;
 
-        long cooldownMs = 300;
+        // Tempo di Cooldown specifico per arma
+        long cooldownMs = 300; // Default Beretta 92FS (0.3s)
         if (ItemFactory.isGlock(weapon)) {
-            cooldownMs = 200;
+            cooldownMs = 200; // Glock 0.2s
         } else if (ItemFactory.isPx4(weapon)) {
-            cooldownMs = 400;
+            cooldownMs = 400; // PX4 0.4s
         }
 
         long now = System.currentTimeMillis();
@@ -322,19 +329,19 @@ public class WeaponListener implements Listener {
             traceDist = eye.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
         }
 
-        // 3. Scia visibile di fumo bianco lungo il percorso (fino a 50 blocchi)
+        // 3. Scia visibile di FUMO BIANCO (FIREWORKS_SPARK crea un raggio di luce/fumo bianco puro)
         for (double d = 0.5; d <= traceDist; d += 0.5) {
             Location point = eye.clone().add(direction.clone().multiply(d));
-            player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
+            player.getWorld().spawnParticle(Particle.FIREWORKS_SPARK, point, 1, 0.0, 0.0, 0.0, 0.0);
         }
 
-        // 4. RayTrace entità
-        Location startTrace = eye.clone().add(direction.clone().multiply(0.5));
+        // 4. RayTrace Danni Entità
+        Location startTrace = eye.clone().add(direction.clone().multiply(0.2));
         RayTraceResult result = player.getWorld().rayTraceEntities(
                 startTrace,
                 direction,
                 traceDist,
-                0.5,
+                0.6, // Hitbox raggio d'azione leggermente allargata per prendere sempre il mob
                 entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
@@ -356,6 +363,7 @@ public class WeaponListener implements Listener {
             damage = headshot ? 1.8 : 1.2;
         }
 
+        // Applicazione diretta del danno e animazione rossa di danno
         target.damage(damage, player);
     }
 
@@ -519,10 +527,10 @@ public class WeaponListener implements Listener {
             }
         }
 
-        ItemStack off = inv.getItemInOffHand();
-        if (ItemFactory.isMunizioni9mm(off) && off.getAmount() > 0) {
-            off.setAmount(off.getAmount() - 1);
-            inv.setItemInOffHand(off.getAmount() <= 0 ? null : off);
+        ItemStack off technique = inv.getItemInOffHand();
+        if (ItemFactory.isMunizioni9mm(off technique) && off technique.getAmount() > 0) {
+            off technique.setAmount(off technique.getAmount() - 1);
+            inv.setItemInOffHand(off technique.getAmount() <= 0 ? null : off technique);
         }
     }
 
@@ -532,40 +540,4 @@ public class WeaponListener implements Listener {
         return meta.getPersistentDataContainer().getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
     }
 
-    private void updateWeaponLore(ItemMeta meta, boolean hasMag, int ammo, int maxCapacity) {
-        List<String> lore = new ArrayList<>();
-        if (hasMag) {
-            lore.add("§7Caricatore: §b" + ammo + "/" + maxCapacity);
-        } else {
-            lore.add("§7Caricatore: §cNessuno");
-        }
-        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
-        lore.add("§8Tasto destro: inserisci/espelli caricatore");
-        meta.setLore(lore);
-    }
-
-    private void updateMagazineLore(ItemMeta meta, int ammo, int maxCapacity) {
-        List<String> lore = new ArrayList<>();
-        lore.add("§7Colpi: §f" + ammo + "/" + maxCapacity);
-        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
-        meta.setLore(lore);
-    }
-
-    private void consumeOneOffhand(Player player, ItemStack offhandItem) {
-        int remaining = offhandItem.getAmount() - 1;
-        if (remaining <= 0) {
-            player.getInventory().setItemInOffHand(null);
-        } else {
-            offhandItem.setAmount(remaining);
-            player.getInventory().setItemInOffHand(offhandItem);
-        }
-    }
-
-    private void giveOrDrop(Player player, ItemStack item) {
-        if (player.getInventory().firstEmpty() == -1) {
-            player.getWorld().dropItemNaturally(player.getLocation(), item);
-        } else {
-            player.getInventory().addItem(item);
-        }
-    }
-}
+    private void updateWeaponLore(ItemMeta meta, boolean hasMag, int ammo,
