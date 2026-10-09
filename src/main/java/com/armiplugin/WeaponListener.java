@@ -36,7 +36,7 @@ public class WeaponListener implements Listener {
 
     private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
-    private static final long RELOAD_INTERVAL_TICKS = 5L;
+    private static final long RELOAD_INTERVAL_TICKS = 5L; // ~0.25s per proiettile
 
     private final JavaPlugin plugin;
 
@@ -149,14 +149,15 @@ public class WeaponListener implements Listener {
         return aimingPlayers.contains(player.getUniqueId());
     }
 
+    // Rileva l'arma attiva sia in mano primaria che in seconda mano durante la mira
     private ItemStack getActiveWeapon(Player player) {
-        if (isAiming(player)) {
-            ItemStack off = player.getInventory().getItemInOffHand();
-            return isAnyWeapon(off) ? off : null;
-        } else {
-            ItemStack main = player.getInventory().getItemInMainHand();
-            return isAnyWeapon(main) ? main : null;
-        }
+        ItemStack main = player.getInventory().getItemInMainHand();
+        if (isAnyWeapon(main)) return main;
+
+        ItemStack off = player.getInventory().getItemInOffHand();
+        if (isAnyWeapon(off)) return off;
+
+        return null;
     }
 
     private void saveActiveWeapon(Player player, ItemStack weapon) {
@@ -241,8 +242,6 @@ public class WeaponListener implements Listener {
 
         if (isHoldingWeaponOrSight(player)) {
             event.setCancelled(true);
-            
-            // Eseguiamo lo sparo al prossimo tick per evitare che la cancellazione dell'evento blocchi la registrazione del danno
             new BukkitRunnable() {
                 @Override
                 public void run() {
@@ -338,7 +337,7 @@ public class WeaponListener implements Listener {
                 eye,
                 direction,
                 traceDist,
-                0.8, // Bounding box espansa per garantire l'aggancio del mob
+                0.8,
                 entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
@@ -351,16 +350,17 @@ public class WeaponListener implements Listener {
         double headY = target.getEyeLocation().getY();
         boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
 
+        // Calcolo danni dinamico in base all'arma identificata
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 3.2 : 2.5;
         } else if (ItemFactory.isBeretta(weapon)) {
             damage = headshot ? 2.5 : 1.8;
         } else {
+            // Glock di default
             damage = headshot ? 1.8 : 1.2;
         }
 
-        // APPLICAZIONE DANNO GARANTITA SUL BERSAGLIO
         target.setNoDamageTicks(0);
         target.damage(damage, player);
     }
