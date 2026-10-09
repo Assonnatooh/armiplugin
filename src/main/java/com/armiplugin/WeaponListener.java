@@ -36,8 +36,6 @@ public class WeaponListener implements Listener {
 
     private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
-    
-    // 5 tick = 0.25 secondi per ogni singolo proiettile
     private static final long RELOAD_INTERVAL_TICKS = 5L;
 
     private final JavaPlugin plugin;
@@ -171,8 +169,8 @@ public class WeaponListener implements Listener {
 
     private boolean isHoldingWeaponOrSight(Player player) {
         ItemStack main = player.getInventory().getItemInMainHand();
-        if (isAnyWeapon(main)) return true;
-        return isAiming(player) && isAnySightItem(main);
+        ItemStack off = player.getInventory().getItemInOffHand();
+        return isAnyWeapon(main) || isAnySightItem(main) || isAnyWeapon(off);
     }
 
     private boolean isAnyWeapon(ItemStack item) {
@@ -243,7 +241,14 @@ public class WeaponListener implements Listener {
 
         if (isHoldingWeaponOrSight(player)) {
             event.setCancelled(true);
-            tryShoot(player);
+            
+            // Eseguiamo lo sparo al prossimo tick per evitare che la cancellazione dell'evento blocchi la registrazione del danno
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    tryShoot(player);
+                }
+            }.runTaskLater(plugin, 1L);
         }
     }
 
@@ -262,7 +267,7 @@ public class WeaponListener implements Listener {
 
     private void tryShoot(Player player) {
         ItemStack weapon = getActiveWeapon(player);
-        if (weapon == null || !player.isSneaking()) return;
+        if (weapon == null) return;
 
         long cooldownMs = 300;
         if (ItemFactory.isGlock(weapon)) {
@@ -315,26 +320,25 @@ public class WeaponListener implements Listener {
         // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // 2. Limite gittata
+        // 2. Controllo gittata ostacoli
         double traceDist = MAX_DISTANCE;
         RayTraceResult blockTrace = player.getWorld().rayTraceBlocks(eye, direction, MAX_DISTANCE);
         if (blockTrace != null && blockTrace.getHitBlock() != null) {
             traceDist = eye.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
         }
 
-        // 3. Scia visibile di fumo bianco lungo il percorso (fino a 50 blocchi)
+        // 3. Scia visibile di fumo
         for (double d = 0.5; d <= traceDist; d += 0.5) {
             Location point = eye.clone().add(direction.clone().multiply(d));
             player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
         }
 
-        // 4. RayTrace entità
-        Location startTrace = eye.clone().add(direction.clone().multiply(0.5));
+        // 4. RayTrace Entità
         RayTraceResult result = player.getWorld().rayTraceEntities(
-                startTrace,
+                eye,
                 direction,
                 traceDist,
-                0.5,
+                0.8, // Bounding box espansa per garantire l'aggancio del mob
                 entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
@@ -356,6 +360,8 @@ public class WeaponListener implements Listener {
             damage = headshot ? 1.8 : 1.2;
         }
 
+        // APPLICAZIONE DANNO GARANTITA SUL BERSAGLIO
+        target.setNoDamageTicks(0);
         target.damage(damage, player);
     }
 
@@ -539,7 +545,7 @@ public class WeaponListener implements Listener {
         } else {
             lore.add("§7Caricatore: §cNessuno");
         }
-        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
+        lore.add("§8Tasto sinistro: spara");
         lore.add("§8Tasto destro: inserisci/espelli caricatore");
         meta.setLore(lore);
     }
