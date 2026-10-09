@@ -11,7 +11,7 @@ public class GUIListener implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (event.getView().getTitle().equals(ArmiGUI.TITLE)) {
-            event.setCancelled(true); // Impedisce di prendere l'item direttamente dalla GUI e scompaginarla
+            event.setCancelled(true);
 
             if (event.getClickedInventory() == null || !event.getClickedInventory().equals(event.getView().getTopInventory())) {
                 return;
@@ -21,7 +21,6 @@ public class GUIListener implements Listener {
             int slot = event.getSlot();
 
             switch (slot) {
-                // GLOCK (Prima Riga)
                 case ArmiGUI.SLOT_GLOCK:
                     giveOrDrop(player, ItemFactory.createGlock());
                     player.sendMessage("§aHai ricevuto una Glock 17!");
@@ -35,7 +34,6 @@ public class GUIListener implements Listener {
                     player.sendMessage("§aHai ricevuto 64 Munizioni 9mm!");
                     break;
 
-                // BERETTA 92FS (Seconda Riga)
                 case ArmiGUI.SLOT_BERETTA:
                     giveOrDrop(player, ItemFactory.createBeretta92FS());
                     player.sendMessage("§aHai ricevuto una Beretta 92FS!");
@@ -45,7 +43,6 @@ public class GUIListener implements Listener {
                     player.sendMessage("§aHai ricevuto un Caricatore 92FS!");
                     break;
 
-                // BERETTA PX4 (Terza Riga)
                 case ArmiGUI.SLOT_PX4:
                     giveOrDrop(player, ItemFactory.createBerettaPx4());
                     player.sendMessage("§aHai ricevuto una Beretta PX4!");
