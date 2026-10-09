@@ -1,6 +1,5 @@
 package com.armiplugin;
 
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -17,219 +16,197 @@ public class ItemFactory {
 
     // --- GLOCK 17 ---
     public static ItemStack createGlock() {
-        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemStack item = new ItemStack(Material.FEATHER);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Glock 17");
-            meta.setCustomModelData(11);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_weapon");
-            meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+        meta.setDisplayName("§fGlock 17");
+        meta.setCustomModelData(11);
+        meta.getPersistentDataContainer().set(Keys.WEAPON_TYPE, PersistentDataType.STRING, "glock");
+        meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+        
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Caricatore: §cNessuno");
+        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
+        lore.add("§8Tasto destro: inserisci/espelli caricatore");
+        meta.setLore(lore);
 
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Caricatore: " + ChatColor.RED + "Nessuno");
-            lore.add(ChatColor.DARK_GRAY + "Tasto sinistro: spara (solo accovacciato)");
-            lore.add(ChatColor.DARK_GRAY + "Tasto destro: inserisci/espelli caricatore");
-            meta.setLore(lore);
-
-            item.setItemMeta(meta);
-        }
+        item.setItemMeta(meta);
         return item;
     }
 
     public static ItemStack createCaricatoreGlock(int ammo) {
-        ItemStack item = new ItemStack(Material.STICK);
+        ItemStack item = new ItemStack(Material.FLINT);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.YELLOW + "Caricatore Glock");
-            meta.setCustomModelData(394);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_magazine");
-            meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
+        meta.setDisplayName("§fCaricatore Glock");
+        meta.setCustomModelData(394);
+        meta.getPersistentDataContainer().set(Keys.MAG_TYPE, PersistentDataType.STRING, "glock");
+        meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Colpi: " + ChatColor.WHITE + ammo + "/" + GLOCK_MAG_CAPACITY);
-            lore.add(ChatColor.DARK_GRAY + "Tasto destro: ricarica dai 9mm nell'inventario");
-            meta.setLore(lore);
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Colpi: §f" + ammo + "/" + GLOCK_MAG_CAPACITY);
+        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
+        meta.setLore(lore);
 
-            item.setItemMeta(meta);
-        }
+        item.setItemMeta(meta);
         return item;
     }
 
     // --- BERETTA 92FS ---
     public static ItemStack createBeretta92FS() {
-        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemStack item = new ItemStack(Material.FEATHER);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Beretta 92FS");
-            meta.setCustomModelData(8);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_weapon");
-            meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+        meta.setDisplayName("§fBeretta 92FS");
+        meta.setCustomModelData(8);
+        meta.getPersistentDataContainer().set(Keys.WEAPON_TYPE, PersistentDataType.STRING, "beretta");
+        meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
 
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Caricatore: " + ChatColor.RED + "Nessuno");
-            lore.add(ChatColor.DARK_GRAY + "Tasto sinistro: spara (solo accovacciato)");
-            lore.add(ChatColor.DARK_GRAY + "Tasto destro: inserisci/espelli caricatore");
-            meta.setLore(lore);
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Caricatore: §cNessuno");
+        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
+        lore.add("§8Tasto destro: inserisci/espelli caricatore");
+        meta.setLore(lore);
 
-            item.setItemMeta(meta);
-        }
+        item.setItemMeta(meta);
         return item;
     }
 
     public static ItemStack createCaricatoreBeretta(int ammo) {
-        ItemStack item = new ItemStack(Material.STICK);
+        ItemStack item = new ItemStack(Material.FLINT);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.YELLOW + "Caricatore 92FS");
-            meta.setCustomModelData(394);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_magazine");
-            meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
+        meta.setDisplayName("§fCaricatore 92FS");
+        meta.setCustomModelData(394);
+        meta.getPersistentDataContainer().set(Keys.MAG_TYPE, PersistentDataType.STRING, "beretta");
+        meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Colpi: " + ChatColor.WHITE + ammo + "/" + BERETTA_MAG_CAPACITY);
-            lore.add(ChatColor.DARK_GRAY + "Tasto destro: ricarica dai 9mm nell'inventario");
-            meta.setLore(lore);
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Colpi: §f" + ammo + "/" + BERETTA_MAG_CAPACITY);
+        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
+        meta.setLore(lore);
 
-            item.setItemMeta(meta);
-        }
+        item.setItemMeta(meta);
         return item;
     }
 
     // --- BERETTA PX4 ---
     public static ItemStack createBerettaPx4() {
-        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemStack item = new ItemStack(Material.FEATHER);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Beretta PX4");
-            meta.setCustomModelData(6); // CMD impostato a 6
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "px4_weapon");
-            meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+        meta.setDisplayName("§fBeretta PX4");
+        meta.setCustomModelData(6);
+        meta.getPersistentDataContainer().set(Keys.WEAPON_TYPE, PersistentDataType.STRING, "px4");
+        meta.getPersistentDataContainer().set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
 
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Caricatore: " + ChatColor.RED + "Nessuno");
-            lore.add(ChatColor.DARK_GRAY + "Tasto sinistro: spara (solo accovacciato)");
-            lore.add(ChatColor.DARK_GRAY + "Tasto destro: inserisci/espelli caricatore");
-            meta.setLore(lore);
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Caricatore: §cNessuno");
+        lore.add("§8Tasto sinistro: spara (solo accovacciato)");
+        lore.add("§8Tasto destro: inserisci/espelli caricatore");
+        meta.setLore(lore);
 
-            item.setItemMeta(meta);
-        }
+        item.setItemMeta(meta);
         return item;
     }
 
     public static ItemStack createCaricatorePx4(int ammo) {
-        ItemStack item = new ItemStack(Material.STICK);
+        ItemStack item = new ItemStack(Material.FLINT);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.YELLOW + "Caricatore PX4");
-            meta.setCustomModelData(394);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "px4_magazine");
-            meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
+        meta.setDisplayName("§fCaricatore PX4");
+        meta.setCustomModelData(394);
+        meta.getPersistentDataContainer().set(Keys.MAG_TYPE, PersistentDataType.STRING, "px4");
+        meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
 
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Colpi: " + ChatColor.WHITE + ammo + "/" + PX4_MAG_CAPACITY);
-            lore.add(ChatColor.DARK_GRAY + "Tasto destro: ricarica dai 9mm nell'inventario");
-            meta.setLore(lore);
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Colpi: §f" + ammo + "/" + PX4_MAG_CAPACITY);
+        lore.add("§8Tasto destro: ricarica dai 9mm nell'inventario");
+        meta.setLore(lore);
 
-            item.setItemMeta(meta);
-        }
+        item.setItemMeta(meta);
         return item;
     }
 
     // --- MUNIZIONI ---
     public static ItemStack createMunizioni9mm(int amount) {
-        ItemStack item = new ItemStack(Material.STICK, amount);
+        ItemStack item = new ItemStack(Material.CLAY_BALL, amount);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.WHITE + "Munizioni 9mm");
-            meta.setCustomModelData(91);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "9mm_ammo");
-            item.setItemMeta(meta);
-        }
+        meta.setDisplayName("§fMunizioni 9mm");
+        meta.setCustomModelData(91);
+        item.setItemMeta(meta);
         return item;
     }
 
-    // --- MIRINI (ADS) ---
+    // --- MIRINI ---
     public static ItemStack createSightItem() {
-        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemStack item = new ItemStack(Material.CARROT_ON_A_STICK);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Glock 17 (Mirino)");
-            meta.setCustomModelData(100);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "glock_sight");
-            item.setItemMeta(meta);
-        }
+        meta.setDisplayName("§fMirino Glock");
+        meta.setCustomModelData(100);
+        item.setItemMeta(meta);
         return item;
     }
 
     public static ItemStack createBerettaSightItem() {
-        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemStack item = new ItemStack(Material.CARROT_ON_A_STICK);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Beretta 92FS (Mirino)");
-            meta.setCustomModelData(100);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "beretta_sight");
-            item.setItemMeta(meta);
-        }
+        meta.setDisplayName("§fMirino Beretta 92FS");
+        meta.setCustomModelData(100);
+        item.setItemMeta(meta);
         return item;
     }
 
     public static ItemStack createPx4SightItem() {
-        ItemStack item = new ItemStack(Material.CROSSBOW);
+        ItemStack item = new ItemStack(Material.CARROT_ON_A_STICK);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Beretta PX4 (Mirino)");
-            meta.setCustomModelData(100);
-            meta.getPersistentDataContainer().set(Keys.ITEM_ID, PersistentDataType.STRING, "px4_sight");
-            item.setItemMeta(meta);
-        }
+        meta.setDisplayName("§fMirino Beretta PX4");
+        meta.setCustomModelData(100);
+        item.setItemMeta(meta);
         return item;
     }
 
-    // --- CONTROLLI E VERIFICHE ---
+    // --- CONTROLLI ---
     public static boolean isGlock(ItemStack item) {
-        return isMatch(item, "glock_weapon");
+        return checkType(item, Keys.WEAPON_TYPE, "glock");
     }
 
     public static boolean isBeretta(ItemStack item) {
-        return isMatch(item, "beretta_weapon");
+        return checkType(item, Keys.WEAPON_TYPE, "beretta");
     }
 
     public static boolean isPx4(ItemStack item) {
-        return isMatch(item, "px4_weapon");
+        return checkType(item, Keys.WEAPON_TYPE, "px4");
     }
 
     public static boolean isCaricatoreGlock(ItemStack item) {
-        return isMatch(item, "glock_magazine");
+        return checkType(item, Keys.MAG_TYPE, "glock");
     }
 
     public static boolean isCaricatoreBeretta(ItemStack item) {
-        return isMatch(item, "beretta_magazine");
+        return checkType(item, Keys.MAG_TYPE, "beretta");
     }
 
     public static boolean isCaricatorePx4(ItemStack item) {
-        return isMatch(item, "px4_magazine");
+        return checkType(item, Keys.MAG_TYPE, "px4");
     }
 
     public static boolean isMunizioni9mm(ItemStack item) {
-        return isMatch(item, "9mm_ammo");
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().hasCustomModelData() && item.getItemMeta().getCustomModelData() == 91;
     }
 
     public static boolean isSightItem(ItemStack item) {
-        return isMatch(item, "glock_sight");
+        if (item == null || !item.hasItemMeta()) return false;
+        return item.getItemMeta().hasCustomModelData() && item.getItemMeta().getCustomModelData() == 100;
     }
 
     public static boolean isBerettaSightItem(ItemStack item) {
-        return isMatch(item, "beretta_sight");
+        return isSightItem(item);
     }
 
     public static boolean isPx4SightItem(ItemStack item) {
-        return isMatch(item, "px4_sight");
+        return isSightItem(item);
     }
 
-    private static boolean isMatch(ItemStack item, String id) {
+    private static boolean checkType(ItemStack item, org.bukkit.NamespacedKey key, String expected) {
         if (item == null || !item.hasItemMeta()) return false;
         ItemMeta meta = item.getItemMeta();
-        String val = meta.getPersistentDataContainer().get(Keys.ITEM_ID, PersistentDataType.STRING);
-        return id.equals(val);
+        String val = meta.getPersistentDataContainer().get(key, PersistentDataType.STRING);
+        return expected.equals(val);
     }
 }
