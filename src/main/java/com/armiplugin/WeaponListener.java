@@ -36,7 +36,7 @@ public class WeaponListener implements Listener {
 
     private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
-    private static final long RELOAD_INTERVAL_TICKS = 5L; // ~0.25s per proiettile
+    private static final long RELOAD_INTERVAL_TICKS = 5L;
 
     private final JavaPlugin plugin;
 
@@ -264,7 +264,6 @@ public class WeaponListener implements Listener {
     // ---------------------------------------------------------------
 
     private void tryShoot(Player player) {
-        // SPARO CONSENTITO SOLO MENTRE SI È ACCOVACCIATI (SHIFT)
         if (!player.isSneaking()) return;
 
         ItemStack weapon = getActiveWeapon(player);
@@ -321,25 +320,28 @@ public class WeaponListener implements Listener {
         // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // 2. Controllo gittata ostacoli
+        // 2. Calcolo punto di partenza avanzato di 0.8 blocchi per evitare il self-hit
+        Location startRay = eye.clone().add(direction.clone().multiply(0.8));
+
+        // 3. Controllo limite ostacoli
         double traceDist = MAX_DISTANCE;
-        RayTraceResult blockTrace = player.getWorld().rayTraceBlocks(eye, direction, MAX_DISTANCE);
+        RayTraceResult blockTrace = player.getWorld().rayTraceBlocks(startRay, direction, MAX_DISTANCE);
         if (blockTrace != null && blockTrace.getHitBlock() != null) {
-            traceDist = eye.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
+            traceDist = startRay.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
         }
 
-        // 3. Scia visibile di fumo
-        for (double d = 0.5; d <= traceDist; d += 0.5) {
-            Location point = eye.clone().add(direction.clone().multiply(d));
+        // 4. Scia di fumo visibile
+        for (double d = 0.0; d <= traceDist; d += 0.5) {
+            Location point = startRay.clone().add(direction.clone().multiply(d));
             player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
         }
 
-        // 4. RayTrace Entità
+        // 5. RayTrace Entità
         RayTraceResult result = player.getWorld().rayTraceEntities(
-                eye,
+                startRay,
                 direction,
                 traceDist,
-                0.8,
+                1.0, // Bounding box espansa a 1.0 per intercettare sicuramente il mob
                 entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
@@ -352,7 +354,7 @@ public class WeaponListener implements Listener {
         double headY = target.getEyeLocation().getY();
         boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
 
-        // Calcolo danni preciso per arma
+        // Calcolo Danno
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 3.2 : 2.5;
@@ -362,7 +364,7 @@ public class WeaponListener implements Listener {
             damage = headshot ? 1.8 : 1.2;
         }
 
-        // FORZATURA REGISTRAZIONE DANNO SUL BERSAGLIO
+        // GARANZIA REGISTRAZIONE DANNO SUL MOB
         target.setNoDamageTicks(0);
         target.damage(damage, player);
     }
@@ -501,7 +503,7 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // UTILITY LORE (PULITA SENZA ISTRUZIONI)
+    // UTILITY
     // ---------------------------------------------------------------
 
     private boolean hasAnyAmmo(Player player) {
