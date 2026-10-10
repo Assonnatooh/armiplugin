@@ -173,7 +173,6 @@ public class WeaponListener implements Listener {
                 if (isAnyWeapon(item)) {
                     toggleMagazine(player, item);
                 } else if (isAnyMagazine(item)) {
-                    // Se il giocatore fa shift + click destro sul caricatore, lo scarica completamente
                     if (player.isSneaking()) {
                         unloadMagazine(player, item);
                     } else {
@@ -260,10 +259,10 @@ public class WeaponListener implements Listener {
         LivingEntity target = (LivingEntity) result.getHitEntity();
         boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
 
-        // Danni richiesti (in mezzi cuori):
-        // Glock: Corpo = 2.0 (1 cuore), Testa = 4.0 (2 cuori)
-        // Beretta (FS): Corpo = 4.0 (2 cuori), Testa = 6.0 (3 cuori)
-        // PX4: Corpo = 6.0 (3 cuori), Testa = 8.0 (4 cuori)
+        // Danni in mezzi cuori:
+        // Glock: Corpo = 2.0, Testa = 4.0
+        // Beretta (FS): Corpo = 4.0, Testa = 6.0
+        // PX4: Corpo = 6.0, Testa = 8.0
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 8.0 : 6.0;
@@ -273,7 +272,6 @@ public class WeaponListener implements Listener {
             damage = headshot ? 4.0 : 2.0;
         }
 
-        // Applicazione danno con zero knockback (annullando la spinta) e tilt damage pulito
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -282,8 +280,6 @@ public class WeaponListener implements Listener {
                     target.setNoDamageTicks(0);
                     target.setHealth(newHealth);
                     target.playEffect(org.bukkit.EntityEffect.HURT);
-                    
-                    // Rimuove totalmente il knockback azzerando la velocità orizzontale della spinta
                     target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
                 }
             }
@@ -328,21 +324,17 @@ public class WeaponListener implements Listener {
         }
     }
 
-    // Metodo per scaricare il caricatore (Shift + Click destro sul caricatore in mano)
     private void unloadMagazine(Player player, ItemStack magazine) {
         ItemMeta meta = magazine.getItemMeta();
         if (meta == null) return;
         int currentAmmo = getMagAmmo(magazine);
         if (currentAmmo <= 0) return;
 
-        // Resetta i colpi nel caricatore a 0
         meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
         updateMagazineLore(meta, 0, getMaxCapacity(magazine));
         magazine.setItemMeta(meta);
 
-        // Restituisce le munizioni 9mm all'inventario del player sotto forma di item
-        ItemStack ammoDrop = ItemFactory.createMunizioni9mm();
-        ammoDrop.setAmount(currentAmmo);
+        ItemStack ammoDrop = ItemFactory.createMunizioni9mm(currentAmmo);
         giveOrDrop(player, ammoDrop);
 
         player.getWorld().playSound(player.getLocation(), "entity.item.break", 1.0f, 1.0f);
