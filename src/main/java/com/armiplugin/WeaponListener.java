@@ -170,8 +170,16 @@ public class WeaponListener implements Listener {
         } else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             if (isHoldingWeaponOrSight(player)) event.setCancelled(true);
             if (item != null) {
-                if (isAnyWeapon(item)) toggleMagazine(player, item);
-                else if (isAnyMagazine(item)) toggleReload(player);
+                if (isAnyWeapon(item)) {
+                    toggleMagazine(player, item);
+                } else if (isAnyMagazine(item)) {
+                    // Se il giocatore fa shift + click destro sul caricatore, lo scarica completamente
+                    if (player.isSneaking()) {
+                        unloadMagazine(player, item);
+                    } else {
+                        toggleReload(player);
+                    }
+                }
             }
         }
     }
@@ -236,7 +244,6 @@ public class WeaponListener implements Listener {
         Vector direction = eye.getDirection().normalize();
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // Scia di fumo ripristinata
         for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
             Location point = eye.clone().add(direction.clone().multiply(d));
             player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
@@ -253,9 +260,20 @@ public class WeaponListener implements Listener {
         LivingEntity target = (LivingEntity) result.getHitEntity();
         boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
 
-        double damage = ItemFactory.isPx4(weapon) ? (headshot ? 3.2 : 2.5) :
-                        (ItemFactory.isBeretta(weapon) ? (headshot ? 2.5 : 1.8) : (headshot ? 1.8 : 1.2));
+        // Danni richiesti (in mezzi cuori):
+        // Glock: Corpo = 2.0 (1 cuore), Testa = 4.0 (2 cuori)
+        // Beretta (FS): Corpo = 4.0 (2 cuori), Testa = 6.0 (3 cuori)
+        // PX4: Corpo = 6.0 (3 cuori), Testa = 8.0 (4 cuori)
+        double damage;
+        if (ItemFactory.isPx4(weapon)) {
+            damage = headshot ? 8.0 : 6.0;
+        } else if (ItemFactory.isBeretta(weapon)) {
+            damage = headshot ? 6.0 : 4.0;
+        } else {
+            damage = headshot ? 4.0 : 2.0;
+        }
 
+        // Applicazione danno con zero knockback (annullando la spinta) e tilt damage pulito
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -264,6 +282,9 @@ public class WeaponListener implements Listener {
                     target.setNoDamageTicks(0);
                     target.setHealth(newHealth);
                     target.playEffect(org.bukkit.EntityEffect.HURT);
+                    
+                    // Rimuove totalmente il knockback azzerando la velocità orizzontale della spinta
+                    target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
                 }
             }
         }.runTaskLater(plugin, 1L);
@@ -305,6 +326,27 @@ public class WeaponListener implements Listener {
             consumeOneOffhand(player, offhand);
             player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
         }
+    }
+
+    // Metodo per scaricare il caricatore (Shift + Click destro sul caricatore in mano)
+    private void unloadMagazine(Player player, ItemStack magazine) {
+        ItemMeta meta = magazine.getItemMeta();
+        if (meta == null) return;
+        int currentAmmo = getMagAmmo(magazine);
+        if (currentAmmo <= 0) return;
+
+        // Resetta i colpi nel caricatore a 0
+        meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
+        updateMagazineLore(meta, 0, getMaxCapacity(magazine));
+        magazine.setItemMeta(meta);
+
+        // Restituisce le munizioni 9mm all'inventario del player sotto forma di item
+        ItemStack ammoDrop = ItemFactory.createMunizioni9mm();
+        ammoDrop.setAmount(currentAmmo);
+        giveOrDrop(player, ammoDrop);
+
+        player.getWorld().playSound(player.getLocation(), "entity.item.break", 1.0f, 1.0f);
+        player.sendMessage("§aCaricatore scaricato con successo!");
     }
 
     private void toggleReload(Player player) {
