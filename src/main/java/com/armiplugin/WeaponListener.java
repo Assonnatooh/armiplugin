@@ -259,7 +259,7 @@ public class WeaponListener implements Listener {
         LivingEntity target = (LivingEntity) result.getHitEntity();
         boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
 
-        // Danni tarati per il bersaglio da 20 HP (10 cuori):
+        // Danni tarati esattamente sui colpi richiesti per bersaglio da 20 HP (10 cuori):
         // - PX4: Testa (3 colpi) = 6.67, Corpo (5 colpi) = 4.0
         // - Beretta FS92: Testa (5 colpi) = 4.0, Corpo (7 colpi) = 2.86
         // - Glock: Testa (7 colpi) = 2.86, Corpo (9 colpi) = 2.22
@@ -272,9 +272,10 @@ public class WeaponListener implements Listener {
             damage = headshot ? 2.86 : 2.22;
         }
 
-        // Tilt damage nativo sincronizzato con azzeramento totale del knockback
         target.setNoDamageTicks(0);
-        target.damage(damage, player);
+        double newHealth = Math.max(0, target.getHealth() - damage);
+        target.setHealth(newHealth);
+        
         target.playEffect(org.bukkit.EntityEffect.HURT);
         target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
     }
