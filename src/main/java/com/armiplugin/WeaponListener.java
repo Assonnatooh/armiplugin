@@ -14,7 +14,6 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -35,7 +34,6 @@ public class WeaponListener implements Listener {
 
     private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
-    private static final long RELOAD_INTERVAL_TICKS = 5L;
 
     private final JavaPlugin plugin;
     private final HashMap<UUID, Long> lastShot = new HashMap<>();
@@ -210,7 +208,44 @@ public class WeaponListener implements Listener {
 
         int ammo = pdc.get(Keys.MAG_AMMO, PersistentDataType.INTEGER) - 1;
         pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
-        updateWeaponLore(meta, true
+        updateWeaponLore(meta, true, ammo, getMaxCapacity(weapon));
+        weapon.setItemMeta(meta);
+        saveActiveWeapon(player, weapon);
+        lastShot.put(player.getUniqueId(), now);
+
+        fireEffectsAndDamage(player, weapon);
+    }
+
+    private void fireEffectsAndDamage(Player player, ItemStack weapon) {
+        Location eye = player.getEyeLocation();
+        Vector direction = eye.getDirection().normalize();
+        player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
+
+        RayTraceResult result = player.getWorld().rayTraceEntities(
+                eye, direction, MAX_DISTANCE, 2.0,
+                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
+        );
+
+        if (result == null || !(result.getHitEntity() instanceof LivingEntity)) return;
+
+        LivingEntity target = (LivingEntity) result.getHitEntity();
+        boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
+        double damage = ItemFactory.isPx4(weapon) ? (headshot ? 3.2 : 2.5) :
+                        (ItemFactory.isBeretta(weapon) ? (headshot ? 2.5 : 1.8) : (headshot ? 1.8 : 1.2));
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (target.isValid() && !target.isDead()) {
+                    double newHealth = Math.max(0, target.getHealth() - damage);
+                    target.setNoDamageTicks(0);
+                    target.setHealth(newHealth);
+                    target.playEffect(org.bukkit.EntityEffect.HURT);
+                }
+            }
+        }.runTaskLater(plugin, 1L);
+    }
+
     private void toggleMagazine(Player player, ItemStack weapon) {
         ItemMeta meta = weapon.getItemMeta();
         if (meta == null) return;
