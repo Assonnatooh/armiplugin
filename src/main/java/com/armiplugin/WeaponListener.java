@@ -35,11 +35,12 @@ public class WeaponListener implements Listener {
 
     private static final double MAX_DISTANCE = 50.0;
     private static final double HEADSHOT_THRESHOLD = 0.35;
-    private static final long RELOAD_INTERVAL_TICKS = 5L;
+    private static final long ACTION_INTERVAL_TICKS = 5L;
 
     private final JavaPlugin plugin;
     private final HashMap<UUID, Long> lastShot = new HashMap<>();
     private final HashMap<UUID, BukkitTask> reloadTasks = new HashMap<>();
+    private final HashMap<UUID, BukkitTask> unloadTasks = new HashMap<>();
     private final Set<UUID> aimingPlayers = new HashSet<>();
     private final HashMap<UUID, AimState> aimStatesMap = new HashMap<>();
 
@@ -73,6 +74,8 @@ public class WeaponListener implements Listener {
         Player player = event.getPlayer();
         UUID id = player.getUniqueId();
         if (aimingPlayers.contains(id)) stopAiming(player);
+        stopReload(id);
+        stopUnload(id);
         if (player.isSneaking()) {
             ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
             if (isAnyWeapon(newItem)) startAiming(player, newItem, event.getNewSlot());
@@ -156,6 +159,7 @@ public class WeaponListener implements Listener {
     public void onInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
+        
         if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
             if (isHoldingWeaponOrSight(player)) {
                 event.setCancelled(true);
@@ -164,10 +168,16 @@ public class WeaponListener implements Listener {
         } else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             if (isHoldingWeaponOrSight(player)) event.setCancelled(true);
             if (item != null) {
-                if (isAnyWeapon(item)) toggleMagazine(player, item);
-                else if (isAnyMagazine(item)) {
-                    if (player.isSneaking()) unloadMagazine(player, item);
-                    else toggleReload(player);
+                if (isAnyWeapon(item)) {
+                    toggleMagazine(player, item);
+                } else if (isAnyMagazine(item)) {
+                    // Shift + Click Destro -> Ricarica graduale
+                    // Click Destro normale -> Scaricamento graduale colpo per colpo
+                    if (player.isSneaking()) {
+                        toggleReload(player);
+                    } else {
+                        toggleUnload(player);
+                    }
                 }
             }
         }
@@ -187,6 +197,7 @@ public class WeaponListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         stopReload(player.getUniqueId());
+        stopUnload(player.getUniqueId());
         if (isAiming(player)) stopAiming(player);
     }
 
@@ -245,8 +256,11 @@ public class WeaponListener implements Listener {
                         (ItemFactory.isBeretta(weapon) ? (headshot ? 4.0 : 2.86) : (headshot ? 2.86 : 2.22));
 
         target.setNoDamageTicks(0);
-        target.setHealth(Math.max(0, target.getHealth() - damage));
-        target.playEffect(org.bukkit.EntityEffect.HURT);
+        double newHealth = Math.max(0, target.getHealth() - damage);
+        target.setHealth(newHealth);
+        
+        // Forza il tilt visivo e il lampeggio rosso sul client
+        target.damage(0.001, player);
         target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
     }
 
@@ -279,36 +293,85 @@ public class WeaponListener implements Listener {
         }
     }
 
-    private void unloadMagazine(Player player, ItemStack mag) {
-        ItemMeta meta = mag.getItemMeta();
-        if (meta == null) return;
-        int ammo = getMagAmmo(mag);
-        if (ammo <= 0) return;
+    // Scaricamento graduale colpo per colpo con Click Destro normale sul caricatore
+    private void toggleUnload(Player player) {
+        UUID id = player.getUniqueId();
+        if (unloadTasks.containsKey(id)) {
+            stopUnload(id);
+            return;
+        }
+        if (reloadTasks.containsKey(id)) stopReload(id);
 
-        meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
-        updateMagazineLore(meta, 0, getMaxCapacity(mag));
-        mag.setItemMeta(meta);
+        int heldSlot = player.getInventory().getHeldItemSlot();
+        ItemStack mag = player.getInventory().getItem(heldSlot);
+        if (!isAnyMagazine(mag)) return;
 
-        ItemStack ammoDrop = ItemFactory.createMunizioni9mm(ammo);
-        giveOrDrop(player, ammoDrop);
-        player.getWorld().playSound(player.getLocation(), "entity.item.break", 1.0f, 1.0f);
-        player.sendMessage("§aCaricatore scaricato con successo!");
+        int currentAmmo = getMagAmmo(mag);
+        if (currentAmmo <= 0) return;
+
+        BukkitTask task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!player.isOnline()) {
+                    unloadTasks.remove(id);
+                    cancel();
+                    return;
+                }
+                ItemStack currentItem = player.getInventory().getItem(heldSlot);
+                if (!isAnyMagazine(currentItem) || player.getInventory().getHeldItemSlot() != heldSlot) {
+                    unloadTasks.remove(id);
+                    cancel();
+                    return;
+                }
+                int ammoNow = getMagAmmo(currentItem);
+                if (ammoNow <= 0) {
+                    unloadTasks.remove(id);
+                    cancel();
+                    return;
+                }
+
+                int newAmmo = ammoNow - 1;
+                ItemMeta magMeta = currentItem.getItemMeta();
+                if (magMeta != null) {
+                    magMeta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, newAmmo);
+                    updateMagazineLore(magMeta, newAmmo, getMaxCapacity(currentItem));
+                    currentItem.setItemMeta(magMeta);
+                    player.getInventory().setItem(heldSlot, currentItem);
+                }
+
+                giveOrDrop(player, ItemFactory.createMunizioni9mm(1));
+                player.getWorld().playSound(player.getLocation(), "click", 1.0f, 0.8f);
+
+                if (newAmmo <= 0) {
+                    unloadTasks.remove(id);
+                    cancel();
+                }
+            }
+        }.runTaskTimer(plugin, ACTION_INTERVAL_TICKS, ACTION_INTERVAL_TICKS);
+        unloadTasks.put(id, task);
     }
 
+    private void stopUnload(UUID id) {
+        BukkitTask t = unloadTasks.remove(id);
+        if (t != null) t.cancel();
+    }
+
+    // Ricarica graduale colpo per colpo con Shift + Click Destro
     private void toggleReload(Player player) {
         UUID id = player.getUniqueId();
         if (reloadTasks.containsKey(id)) {
             stopReload(id);
             return;
         }
+        if (unloadTasks.containsKey(id)) stopUnload(id);
 
         int heldSlot = player.getInventory().getHeldItemSlot();
         ItemStack mag = player.getInventory().getItem(heldSlot);
         if (!isAnyMagazine(mag)) return;
 
         int max = getMaxCapacity(mag);
-        int cur = getMagAmmo(mag);
-        if (cur >= max || !hasAnyAmmo(player)) return;
+        int current = getMagAmmo(mag);
+        if (current >= max || !hasAnyAmmo(player)) return;
 
         BukkitTask task = new BukkitRunnable() {
             @Override
@@ -346,7 +409,7 @@ public class WeaponListener implements Listener {
                     cancel();
                 }
             }
-        }.runTaskTimer(plugin, RELOAD_INTERVAL_TICKS, RELOAD_INTERVAL_TICKS);
+        }.runTaskTimer(plugin, ACTION_INTERVAL_TICKS, ACTION_INTERVAL_TICKS);
         reloadTasks.put(id, task);
     }
 
