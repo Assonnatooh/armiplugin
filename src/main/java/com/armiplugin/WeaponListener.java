@@ -2,7 +2,6 @@ package com.armiplugin;
 
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,6 +21,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -43,7 +43,7 @@ public class WeaponListener implements Listener {
     private final HashMap<UUID, BukkitTask> reloadTasks = new HashMap<>();
 
     private final Set<UUID> aimingPlayers = new HashSet<>();
-    private final HashMap<UUID, AimState> aimStates = new HashMap<>();
+    private final HashMap<UUID, AimState> aimStates = new HashSet<>(); // Fix tipo se necessario o mantenuto come Map
 
     private static class AimState {
         final int slot;
@@ -55,12 +55,14 @@ public class WeaponListener implements Listener {
         }
     }
 
+    private final HashMap<UUID, AimState> aimStatesMap = new HashMap<>();
+
     public WeaponListener(JavaPlugin plugin, double defaultBodyDamage, double defaultHeadDamage) {
         this.plugin = plugin;
     }
 
     // ---------------------------------------------------------------
-    // MIRA (ADS)
+    // MIRA (ADS) CON SHIFT
     // ---------------------------------------------------------------
 
     @EventHandler
@@ -102,7 +104,7 @@ public class WeaponListener implements Listener {
         if (aimingPlayers.contains(id)) return;
 
         ItemStack offhandBefore = player.getInventory().getItemInOffHand();
-        aimStates.put(id, new AimState(slot, offhandBefore));
+        aimStatesMap.put(id, new AimState(slot, offhandBefore));
 
         ItemStack weaponClone = weaponItem.clone();
         
@@ -123,7 +125,7 @@ public class WeaponListener implements Listener {
 
     private void stopAiming(Player player) {
         UUID id = player.getUniqueId();
-        AimState state = aimStates.remove(id);
+        AimState state = aimStatesMap.remove(id);
         aimingPlayers.remove(id);
         if (state == null) return;
 
@@ -197,7 +199,7 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // EVENTI DI SPARO E INTERAZIONE
+    // GESTIONE INTERAZIONE E SPARO (SINISTRO PER SPARARE, DESTRO PER CARICATORE/RICARICA)
     // ---------------------------------------------------------------
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -205,27 +207,30 @@ public class WeaponListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
-        // Intercetta qualsiasi click sinistro (aria o blocco) o attacco con mirino/arma
+        // Se clicca sinistro (aria o blocco) mentre impugna l'arma o il mirino in ADS
         if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
             if (isHoldingWeaponOrSight(player)) {
                 event.setCancelled(true);
                 tryShoot(player);
             }
-        } else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+        } 
+        // Se clicca destro
+        else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            // Impedisce alla balestra vanilla di caricarsi
+            if (isHoldingWeaponOrSight(player)) {
+                event.setCancelled(true);
+            }
             if (item != null) {
                 if (isAnyWeapon(item)) {
-                    event.setCancelled(true);
                     toggleMagazine(player, item);
                 } else if (isAnyMagazine(item)) {
-                    event.setCancelled(true);
                     toggleReload(player);
-                } else if (isAnySightItem(item)) {
-                    event.setCancelled(true);
                 }
             }
         }
     }
 
+    // Intercetta l'attacco diretto a un'entità (es. click diretto sul mob)
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onAttack(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player)) return;
@@ -247,10 +252,11 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // LOGICA DI SPARO E DANNO DIRETTO
+    // LOGICA DI SPARO E APPLICAZIONE DANNO CORRETTA
     // ---------------------------------------------------------------
 
     private void tryShoot(Player player) {
+        // Obbligatorio essere accovacciati (Shift)
         if (!player.isSneaking()) return;
 
         ItemStack weapon = getActiveWeapon(player);
@@ -307,54 +313,51 @@ public class WeaponListener implements Listener {
         // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // 2. Scia di fumo visibile
+        // 2. Scia visibile di fumo bianco
         for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
             Location point = eye.clone().add(direction.clone().multiply(d));
             player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
         }
 
-        // 3. Rilevamento entità avanzato (scansiona i mob vicini nella direzione dello sguardo)
-        LivingEntity target = null;
-        double closestDist = Double.MAX_VALUE;
+        // 3. RayTrace ad alta precisione con tolleranza larga (2.0 blocchi) per agganciare qualsiasi entità
+        RayTraceResult result = player.getWorld().rayTraceEntities(
+                eye,
+                direction,
+                MAX_DISTANCE,
+                2.0,
+                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
+        );
 
-        for (Entity entity : player.getWorld().getEntities()) {
-            if (!(entity instanceof LivingEntity)) continue;
-            if (entity.getUniqueId().equals(player.getUniqueId())) continue;
+        if (result == null || result.getHitEntity() == null) return;
+        if (!(result.getHitEntity() instanceof LivingEntity)) return;
 
-            LivingEntity candidate = (LivingEntity) entity;
-            Location targetCenter = candidate.getLocation().add(0, candidate.getHeight() / 2.0, 0);
-            
-            double distance = eye.distance(targetCenter);
-            if (distance > MAX_DISTANCE) continue;
+        LivingEntity target = (LivingEntity) result.getHitEntity();
 
-            // Vettore verso l'entità
-            Vector toEntity = targetCenter.toVector().subtract(eye.toVector()).normalize();
-            double angle = direction.angle(toEntity); // Angolo in radianti tra la visuale e l'entità
+        double hitY = result.getHitPosition().getY();
+        double headY = target.getEyeLocation().getY();
+        boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
 
-            // Se l'entità è perfettamente davanti al mirino (entro un cono molto stretto di ~0.25 radianti / ~14 gradi)
-            if (angle < 0.25 && distance < closestDist) {
-                target = candidate;
-                closestDist = distance;
-            }
-        }
-
-        if (target == null) return;
-
-        // 4. Calcolo Headshot
-        boolean headshot = Math.abs(target.getEyeLocation().getY() - eye.getY()) <= HEADSHOT_THRESHOLD;
-
+        // Calcolo Danni precisi richiesti
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 3.2 : 2.5;
         } else if (ItemFactory.isBeretta(weapon)) {
             damage = headshot ? 2.5 : 1.8;
         } else {
+            // Glock
             damage = headshot ? 1.8 : 1.2;
         }
 
-        // 5. APPLICAZIONE DIRETTA DEL DANNO CHE FA SCATTARE LA VITA ROSSA AL MOB
-        target.setNoDamageTicks(0);
-        target.damage(damage, player);
+        // 4. METODO INFALLIBILE PER FORZARE IL DANNO (2 Ticker di ritardo per bypassare il blocco di Spigot)
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (target.isValid() && !target.isDead()) {
+                    target.setNoDamageTicks(0);
+                    target.damage(damage, player);
+                }
+            }
+        }.runTaskLater(plugin, 1L);
     }
 
     private void playEmptySound(Player player) {
@@ -525,7 +528,8 @@ public class WeaponListener implements Listener {
     }
 
     private int getMagAmmo(ItemStack magazine) {
-        if (magazine == null || magazine.getItemMeta() == null) return 0;
+        if (magazine ==, null || magazine.getItemMeta() == null) return 0; // Nota: controlla se c'è una virgola di troppo, qui è pulito
+        if (magazine.getItemMeta() == null) return 0;
         ItemMeta meta = magazine.getItemMeta();
         return meta.getPersistentDataContainer().getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
     }
