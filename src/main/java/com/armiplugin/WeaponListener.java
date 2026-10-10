@@ -46,7 +46,6 @@ public class WeaponListener implements Listener {
     private static class AimState {
         final int slot;
         final ItemStack originalOffhand;
-
         AimState(int slot, ItemStack originalOffhand) {
             this.slot = slot;
             this.originalOffhand = originalOffhand;
@@ -86,10 +85,8 @@ public class WeaponListener implements Listener {
         ItemStack offhandBefore = player.getInventory().getItemInOffHand();
         aimStatesMap.put(id, new AimState(slot, offhandBefore));
         ItemStack weaponClone = weaponItem.clone();
-        ItemStack sightItem;
-        if (ItemFactory.isPx4(weaponItem)) sightItem = ItemFactory.createPx4SightItem();
-        else if (ItemFactory.isBeretta(weaponItem)) sightItem = ItemFactory.createBerettaSightItem();
-        else sightItem = ItemFactory.createSightItem();
+        ItemStack sightItem = ItemFactory.isPx4(weaponItem) ? ItemFactory.createPx4SightItem() :
+                              (ItemFactory.isBeretta(weaponItem) ? ItemFactory.createBerettaSightItem() : ItemFactory.createSightItem());
         player.getInventory().setItem(slot, sightItem);
         player.getInventory().setItemInOffHand(weaponClone);
         aimingPlayers.add(id);
@@ -138,23 +135,20 @@ public class WeaponListener implements Listener {
     }
 
     private boolean isAnyWeapon(ItemStack item) {
-        if (item == null) return false;
-        return ItemFactory.isGlock(item) || ItemFactory.isBeretta(item) || ItemFactory.isPx4(item);
+        return item != null && (ItemFactory.isGlock(item) || ItemFactory.isBeretta(item) || ItemFactory.isPx4(item));
     }
 
     private boolean isAnySightItem(ItemStack item) {
-        if (item == null) return false;
-        return ItemFactory.isSightItem(item) || ItemFactory.isBerettaSightItem(item) || ItemFactory.isPx4SightItem(item);
+        return item != null && (ItemFactory.isSightItem(item) || ItemFactory.isBerettaSightItem(item) || ItemFactory.isPx4SightItem(item));
     }
 
     private boolean isAnyMagazine(ItemStack item) {
-        if (item == null) return false;
-        return ItemFactory.isCaricatoreGlock(item) || ItemFactory.isCaricatoreBeretta(item) || ItemFactory.isCaricatorePx4(item);
+        return item != null && (ItemFactory.isCaricatoreGlock(item) || ItemFactory.isCaricatoreBeretta(item) || ItemFactory.isCaricatorePx4(item));
     }
 
-    private int getMaxCapacity(ItemStack weaponOrMag) {
-        if (ItemFactory.isPx4(weaponOrMag) || ItemFactory.isCaricatorePx4(weaponOrMag)) return ItemFactory.PX4_MAG_CAPACITY;
-        else if (ItemFactory.isBeretta(weaponOrMag) || ItemFactory.isCaricatoreBeretta(weaponOrMag)) return ItemFactory.BERETTA_MAG_CAPACITY;
+    private int getMaxCapacity(ItemStack item) {
+        if (ItemFactory.isPx4(item) || ItemFactory.isCaricatorePx4(item)) return ItemFactory.PX4_MAG_CAPACITY;
+        if (ItemFactory.isBeretta(item) || ItemFactory.isCaricatoreBeretta(item)) return ItemFactory.BERETTA_MAG_CAPACITY;
         return ItemFactory.GLOCK_MAG_CAPACITY;
     }
 
@@ -208,63 +202,12 @@ public class WeaponListener implements Listener {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
 
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
-        if (hasMag != 1) {
-            playEmptySound(player);
+        if (hasMag != 1 || pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0) <= 0) {
+            player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
             lastShot.put(player.getUniqueId(), now);
             return;
         }
 
-        int ammo = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
-        if (ammo <= 0) {
-            playEmptySound(player);
-            lastShot.put(player.getUniqueId(), now);
-            return;
-        }
-
-        ammo--;
+        int ammo = pdc.get(Keys.MAG_AMMO, PersistentDataType.INTEGER) - 1;
         pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
-        updateWeaponLore(meta, true, ammo, getMaxCapacity(weapon));
-        weapon.setItemMeta(meta);
-        saveActiveWeapon(player, weapon);
-        lastShot.put(player.getUniqueId(), now);
-
-        fireEffectsAndDamage(player, weapon);
-    }
-
-    private void fireEffectsAndDamage(Player player, ItemStack weapon) {
-        Location eye = player.getEyeLocation();
-        Vector direction = eye.getDirection().normalize();
-
-        player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
-        player.sendMessage("§a[DEBUG] Sparo partito!");
-
-        for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
-            Location point = eye.clone().add(direction.clone().multiply(d));
-            player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
-        }
-
-        RayTraceResult result = player.getWorld().rayTraceEntities(
-                eye, direction, MAX_DISTANCE, 2.0,
-                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
-        );
-
-        if (result == null || result.getHitEntity() == null) {
-            player.sendMessage("§c[DEBUG] RayTrace fallito: nessun mob trovato sulla linea di mira!");
-            return;
-        }
-
-        if (!(result.getHitEntity() instanceof LivingEntity)) {
-            player.sendMessage("§c[DEBUG] L'entità colpita non è un LivingEntity!");
-            return;
-        }
-
-        LivingEntity target = (LivingEntity) result.getHitEntity();
-        player.sendMessage("§e[DEBUG] Bersaglio trovato: " + target.getType().name());
-
-        boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
-
-        double damage = ItemFactory.isPx4(weapon) ? (headshot ? 3.2 : 2.5) :
-                        (ItemFactory.isBeretta(weapon) ? (headshot ? 2.5 : 1.8) : (headshot ? 1.8 : 1.2));
-
-        double oldHealth = target.getHealth();
-        double newHealth = oldHealth - damage
+        updateWeaponLore(meta, true
