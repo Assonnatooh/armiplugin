@@ -211,3 +211,58 @@ public class WeaponListener implements Listener {
         int ammo = pdc.get(Keys.MAG_AMMO, PersistentDataType.INTEGER) - 1;
         pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
         updateWeaponLore(meta, true
+    private void toggleMagazine(Player player, ItemStack weapon) {
+        ItemMeta meta = weapon.getItemMeta();
+        if (meta == null) return;
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        if (pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0) == 1) {
+            int ammoLeft = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
+            pdc.set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+            pdc.remove(Keys.MAG_AMMO);
+            updateWeaponLore(meta, false, 0, getMaxCapacity(weapon));
+            weapon.setItemMeta(meta);
+            giveOrDrop(player, ItemFactory.isPx4(weapon) ? ItemFactory.createCaricatorePx4(ammoLeft) :
+                              (ItemFactory.isBeretta(weapon) ? ItemFactory.createCaricatoreBeretta(ammoLeft) : ItemFactory.createCaricatoreGlock(ammoLeft)));
+        } else {
+            ItemStack off = player.getInventory().getItemInOffHand();
+            if ((ItemFactory.isPx4(weapon) && !ItemFactory.isCaricatorePx4(off)) ||
+                (ItemFactory.isBeretta(weapon) && !ItemFactory.isCaricatoreBeretta(off)) ||
+                (ItemFactory.isGlock(weapon) && !ItemFactory.isCaricatoreGlock(off))) return;
+            int ammo = off.getItemMeta().getPersistentDataContainer().getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
+            pdc.set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 1);
+            pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
+            updateWeaponLore(meta, true, ammo, getMaxCapacity(weapon));
+            weapon.setItemMeta(meta);
+            if (off.getAmount() <= 1) player.getInventory().setItemInOffHand(null);
+            else off.setAmount(off.getAmount() - 1);
+        }
+    }
+
+    private void toggleReload(Player player) {
+        int slot = player.getInventory().getHeldItemSlot();
+        ItemStack mag = player.getInventory().getItem(slot);
+        if (!isAnyMagazine(mag)) return;
+        int max = getMaxCapacity(mag);
+        ItemMeta meta = mag.getItemMeta();
+        int cur = meta.getPersistentDataContainer().getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
+        if (cur >= max) return;
+        meta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, cur + 1);
+        mag.setItemMeta(meta);
+    }
+
+    private void stopReload(UUID id) {
+        BukkitTask t = reloadTasks.remove(id);
+        if (t != null) t.cancel();
+    }
+
+    private void updateWeaponLore(ItemMeta meta, boolean hasMag, int ammo, int max) {
+        List<String> lore = new ArrayList<>();
+        lore.add(hasMag ? "§7Caricatore: §b" + ammo + "/" + max : "§7Caricatore: §cNessuno");
+        meta.setLore(lore);
+    }
+
+    private void giveOrDrop(Player player, ItemStack item) {
+        if (player.getInventory().firstEmpty() == -1) player.getWorld().dropItemNaturally(player.getLocation(), item);
+        else player.getInventory().addItem(item);
+    }
+}
