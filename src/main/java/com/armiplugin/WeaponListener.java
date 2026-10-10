@@ -2,6 +2,7 @@ package com.armiplugin;
 
 import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -9,7 +10,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -22,7 +22,6 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -198,22 +197,15 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // EVENTI
+    // EVENTI DI SPARO E INTERAZIONE
     // ---------------------------------------------------------------
 
     @EventHandler(priority = EventPriority.HIGH)
-    public void onArmSwing(PlayerAnimationEvent event) {
-        Player player = event.getPlayer();
-        if (isHoldingWeaponOrSight(player)) {
-            tryShoot(player);
-        }
-    }
-
-    @EventHandler
     public void onInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
+        // Intercetta qualsiasi click sinistro (aria o blocco) o attacco con mirino/arma
         if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
             if (isHoldingWeaponOrSight(player)) {
                 event.setCancelled(true);
@@ -241,12 +233,7 @@ public class WeaponListener implements Listener {
 
         if (isHoldingWeaponOrSight(player)) {
             event.setCancelled(true);
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    tryShoot(player);
-                }
-            }.runTaskLater(plugin, 1L);
+            tryShoot(player);
         }
     }
 
@@ -260,7 +247,7 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // SPARO
+    // LOGICA DI SPARO E DANNO DIRETTO
     // ---------------------------------------------------------------
 
     private void tryShoot(Player player) {
@@ -320,38 +307,42 @@ public class WeaponListener implements Listener {
         // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // 2. Controllo gittata ostacoli
-        double traceDist = MAX_DISTANCE;
-        RayTraceResult blockTrace = player.getWorld().rayTraceBlocks(eye, direction, MAX_DISTANCE);
-        if (blockTrace != null && blockTrace.getHitBlock() != null) {
-            traceDist = eye.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
-        }
-
-        // 3. Scia visibile di fumo bianco
-        for (double d = 0.5; d <= traceDist; d += 0.5) {
+        // 2. Scia di fumo visibile
+        for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
             Location point = eye.clone().add(direction.clone().multiply(d));
             player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
         }
 
-        // 4. RayTrace Entità con tolleranza ampia (1.5 blocchi) per agganciare al volo
-        RayTraceResult result = player.getWorld().rayTraceEntities(
-                eye,
-                direction,
-                traceDist,
-                1.5,
-                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
-        );
+        // 3. Rilevamento entità avanzato (scansiona i mob vicini nella direzione dello sguardo)
+        LivingEntity target = null;
+        double closestDist = Double.MAX_VALUE;
 
-        if (result == null || result.getHitEntity() == null) return;
-        if (!(result.getHitEntity() instanceof LivingEntity)) return;
+        for (Entity entity : player.getWorld().getEntities()) {
+            if (!(entity instanceof LivingEntity)) continue;
+            if (entity.getUniqueId().equals(player.getUniqueId())) continue;
 
-        LivingEntity target = (LivingEntity) result.getHitEntity();
+            LivingEntity candidate = (LivingEntity) entity;
+            Location targetCenter = candidate.getLocation().add(0, candidate.getHeight() / 2.0, 0);
+            
+            double distance = eye.distance(targetCenter);
+            if (distance > MAX_DISTANCE) continue;
 
-        double hitY = result.getHitPosition().getY();
-        double headY = target.getEyeLocation().getY();
-        boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
+            // Vettore verso l'entità
+            Vector toEntity = targetCenter.toVector().subtract(eye.toVector()).normalize();
+            double angle = direction.angle(toEntity); // Angolo in radianti tra la visuale e l'entità
 
-        // Calcolo Danno
+            // Se l'entità è perfettamente davanti al mirino (entro un cono molto stretto di ~0.25 radianti / ~14 gradi)
+            if (angle < 0.25 && distance < closestDist) {
+                target = candidate;
+                closestDist = distance;
+            }
+        }
+
+        if (target == null) return;
+
+        // 4. Calcolo Headshot
+        boolean headshot = Math.abs(target.getEyeLocation().getY() - eye.getY()) <= HEADSHOT_THRESHOLD;
+
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 3.2 : 2.5;
@@ -361,7 +352,7 @@ public class WeaponListener implements Listener {
             damage = headshot ? 1.8 : 1.2;
         }
 
-        // APPLICAZIONE DIRETTA DEL DANNO
+        // 5. APPLICAZIONE DIRETTA DEL DANNO CHE FA SCATTARE LA VITA ROSSA AL MOB
         target.setNoDamageTicks(0);
         target.damage(damage, player);
     }
