@@ -259,31 +259,24 @@ public class WeaponListener implements Listener {
         LivingEntity target = (LivingEntity) result.getHitEntity();
         boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
 
-        // Danni in mezzi cuori:
-        // Glock: Corpo = 2.0, Testa = 4.0
-        // Beretta (FS): Corpo = 4.0, Testa = 6.0
-        // PX4: Corpo = 6.0, Testa = 8.0
+        // Danni tarati per il bersaglio da 20 HP (10 cuori):
+        // - PX4: Testa (3 colpi) = 6.67, Corpo (5 colpi) = 4.0
+        // - Beretta FS92: Testa (5 colpi) = 4.0, Corpo (7 colpi) = 2.86
+        // - Glock: Testa (7 colpi) = 2.86, Corpo (9 colpi) = 2.22
         double damage;
         if (ItemFactory.isPx4(weapon)) {
-            damage = headshot ? 8.0 : 6.0;
+            damage = headshot ? 6.67 : 4.0;
         } else if (ItemFactory.isBeretta(weapon)) {
-            damage = headshot ? 6.0 : 4.0;
+            damage = headshot ? 4.0 : 2.86;
         } else {
-            damage = headshot ? 4.0 : 2.0;
+            damage = headshot ? 2.86 : 2.22;
         }
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (target.isValid() && !target.isDead()) {
-                    double newHealth = Math.max(0, target.getHealth() - damage);
-                    target.setNoDamageTicks(0);
-                    target.setHealth(newHealth);
-                    target.playEffect(org.bukkit.EntityEffect.HURT);
-                    target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
-                }
-            }
-        }.runTaskLater(plugin, 1L);
+        // Tilt damage nativo sincronizzato con azzeramento totale del knockback
+        target.setNoDamageTicks(0);
+        target.damage(damage, player);
+        target.playEffect(org.bukkit.EntityEffect.HURT);
+        target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
     }
 
     private void playEmptySound(Player player) {
