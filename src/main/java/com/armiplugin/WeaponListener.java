@@ -1,3 +1,4 @@
+Ecco il codice completo e pulito di WeaponListener.java con i messaggi di debug integrati. Sostituisci interamente il file, compila con Maven e dimmi cosa compare in chat quando spari al mob:
 package com.armiplugin;
 
 import org.bukkit.Location;
@@ -234,7 +235,9 @@ public class WeaponListener implements Listener {
     private void fireEffectsAndDamage(Player player, ItemStack weapon) {
         Location eye = player.getEyeLocation();
         Vector direction = eye.getDirection().normalize();
+
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
+        player.sendMessage("§a[DEBUG] Sparo partito!");
 
         for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
             Location point = eye.clone().add(direction.clone().multiply(d));
@@ -246,24 +249,33 @@ public class WeaponListener implements Listener {
                 entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
         );
 
-        if (result == null || result.getHitEntity() == null) return;
-        if (!(result.getHitEntity() instanceof LivingEntity)) return;
+        if (result == null || result.getHitEntity() == null) {
+            player.sendMessage("§c[DEBUG] RayTrace fallito: nessun mob trovato sulla linea di mira!");
+            return;
+        }
+
+        if (!(result.getHitEntity() instanceof LivingEntity)) {
+            player.sendMessage("§c[DEBUG] L'entità colpita non è un LivingEntity!");
+            return;
+        }
 
         LivingEntity target = (LivingEntity) result.getHitEntity();
+        player.sendMessage("§e[DEBUG] Bersaglio trovato: " + target.getType().name());
+
         boolean headshot = Math.abs(result.getHitPosition().getY() - target.getEyeLocation().getY()) <= HEADSHOT_THRESHOLD;
 
         double damage = ItemFactory.isPx4(weapon) ? (headshot ? 3.2 : 2.5) :
                         (ItemFactory.isBeretta(weapon) ? (headshot ? 2.5 : 1.8) : (headshot ? 1.8 : 1.2));
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (target.isValid() && !target.isDead()) {
-                    target.setNoDamageTicks(0);
-                    target.damage(damage, player);
-                }
-            }
-        }.runTaskLater(plugin, 1L);
+        double oldHealth = target.getHealth();
+        double newHealth = oldHealth - damage;
+        if (newHealth < 0) newHealth = 0;
+
+        target.setNoDamageTicks(0);
+        target.setHealth(newHealth);
+        target.playEffect(org.bukkit.EntityEffect.HURT);
+
+        player.sendMessage("§a[DEBUG] Danno applicato! Vita prima: " + oldHealth + ", Vita ora: " + newHealth);
     }
 
     private void playEmptySound(Player player) {
@@ -431,3 +443,4 @@ public class WeaponListener implements Listener {
         else player.getInventory().addItem(item);
     }
 }
+
