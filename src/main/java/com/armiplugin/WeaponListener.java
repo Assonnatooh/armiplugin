@@ -171,12 +171,16 @@ public class WeaponListener implements Listener {
                 if (isAnyWeapon(item)) {
                     toggleMagazine(player, item);
                 } else if (isAnyMagazine(item)) {
-                    // Shift + Click Destro -> Ricarica graduale
-                    // Click Destro normale -> Scaricamento graduale colpo per colpo
-                    if (player.isSneaking()) {
-                        toggleReload(player);
-                    } else {
+                    // Logica unificata a tasto destro normale:
+                    // - Se il caricatore è pieno (o non ci sono munizioni nell'inv per ricaricare) -> Scarica colpo per colpo
+                    // - Altrimenti -> Ricarica colpo per colpo
+                    int currentAmmo = getMagAmmo(item);
+                    int maxCap = getMaxCapacity(item);
+                    
+                    if (currentAmmo >= maxCap || !hasAnyAmmo(player)) {
                         toggleUnload(player);
+                    } else {
+                        toggleReload(player);
                     }
                 }
             }
@@ -259,8 +263,9 @@ public class WeaponListener implements Listener {
         double newHealth = Math.max(0, target.getHealth() - damage);
         target.setHealth(newHealth);
         
-        // Forza il tilt visivo e il lampeggio rosso sul client
+        // Tilt visivo e lampeggio rosso forzato sul client
         target.damage(0.001, player);
+        target.setNoDamageTicks(0);
         target.setVelocity(new Vector(0, target.getVelocity().getY(), 0));
     }
 
@@ -293,7 +298,7 @@ public class WeaponListener implements Listener {
         }
     }
 
-    // Scaricamento graduale colpo per colpo con Click Destro normale sul caricatore
+    // Scaricamento graduale colpo per colpo con Tasto Destro normale
     private void toggleUnload(Player player) {
         UUID id = player.getUniqueId();
         if (unloadTasks.containsKey(id)) {
@@ -356,7 +361,7 @@ public class WeaponListener implements Listener {
         if (t != null) t.cancel();
     }
 
-    // Ricarica graduale colpo per colpo con Shift + Click Destro
+    // Ricarica graduale colpo per colpo con Tasto Destro normale
     private void toggleReload(Player player) {
         UUID id = player.getUniqueId();
         if (reloadTasks.containsKey(id)) {
