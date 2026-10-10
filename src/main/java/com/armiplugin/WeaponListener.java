@@ -2,6 +2,7 @@ package com.armiplugin;
 
 import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,7 +23,6 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -320,41 +320,42 @@ public class WeaponListener implements Listener {
         // 1. Suono sparo
         player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
 
-        // 2. Calcolo punto di partenza avanzato di 0.8 blocchi per evitare il self-hit
-        Location startRay = eye.clone().add(direction.clone().multiply(0.8));
-
-        // 3. Controllo limite ostacoli
-        double traceDist = MAX_DISTANCE;
-        RayTraceResult blockTrace = player.getWorld().rayTraceBlocks(startRay, direction, MAX_DISTANCE);
-        if (blockTrace != null && blockTrace.getHitBlock() != null) {
-            traceDist = startRay.distance(blockTrace.getHitPosition().toLocation(player.getWorld()));
-        }
-
-        // 4. Scia di fumo visibile
-        for (double d = 0.0; d <= traceDist; d += 0.5) {
-            Location point = startRay.clone().add(direction.clone().multiply(d));
+        // 2. Scia di particelle bianche (fumo) fino a 50 blocchi
+        for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
+            Location point = eye.clone().add(direction.clone().multiply(d));
             player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
         }
 
-        // 5. RayTrace Entità
-        RayTraceResult result = player.getWorld().rayTraceEntities(
-                startRay,
-                direction,
-                traceDist,
-                1.0, // Bounding box espansa a 1.0 per intercettare sicuramente il mob
-                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
-        );
+        // 3. Ricerca dell'entità mirata nel raggio di 50 blocchi tramite controllo geometrico preciso
+        LivingEntity target = null;
+        double closestDistSq = MAX_DISTANCE * MAX_DISTANCE;
 
-        if (result == null || result.getHitEntity() == null) return;
-        if (!(result.getHitEntity() instanceof LivingEntity)) return;
+        for (Entity entity : player.getWorld().getEntities()) {
+            if (!(entity instanceof LivingEntity)) continue;
+            if (entity.getUniqueId().equals(player.getUniqueId())) continue;
 
-        LivingEntity target = (LivingEntity) result.getHitEntity();
+            LivingEntity candidate = (LivingEntity) entity;
+            Location targetLoc = candidate.getLocation().add(0, candidate.getHeight() / 2.0, 0);
+            
+            // Distanza dal giocatore
+            double distSq = eye.distanceSquared(targetLoc);
+            if (distSq > closestDistSq) continue;
 
-        double hitY = result.getHitPosition().getY();
-        double headY = target.getEyeLocation().getY();
-        boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
+            // Controllo se l'entità è nella direzione in cui guarda il player (angolo di visuale stretto)
+            Vector toEntity = targetLoc.toVector().subtract(eye.toVector());
+            double dot = toEntity.normalize().dot(direction);
+            
+            if (dot > 0.95) { // Se l'angolo di mira punta verso l'entità
+                target = candidate;
+                closestDistSq = distSq;
+            }
+        }
 
-        // Calcolo Danno
+        if (target == null) return;
+
+        // 4. Calcolo Headshot (se l'altezza dell'impatto stimato è vicina agli occhi)
+        boolean headshot = Math.abs(target.getEyeLocation().getY() - eye.getY()) <= HEADSHOT_THRESHOLD;
+
         double damage;
         if (ItemFactory.isPx4(weapon)) {
             damage = headshot ? 3.2 : 2.5;
@@ -364,7 +365,7 @@ public class WeaponListener implements Listener {
             damage = headshot ? 1.8 : 1.2;
         }
 
-        // GARANZIA REGISTRAZIONE DANNO SUL MOB
+        // 5. APPLICAZIONE FORZATA DEL DANNO
         target.setNoDamageTicks(0);
         target.damage(damage, player);
     }
@@ -575,4 +576,4 @@ public class WeaponListener implements Listener {
             player.getInventory().addItem(item);
         }
     }
-}
+    }
