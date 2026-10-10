@@ -226,3 +226,149 @@ public class WeaponListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onAttack(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player)) return;
+        Player player = (Player) event.getDamager();
+
+        if (isHoldingWeaponOrSight(player)) {
+            event.setCancelled(true);
+            tryShoot(player);
+        }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        stopReload(player.getUniqueId());
+        if (isAiming(player)) {
+            stopAiming(player);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // LOGICA DI SPARO E APPLICAZIONE DANNO
+    // ---------------------------------------------------------------
+
+    private void tryShoot(Player player) {
+        if (!player.isSneaking()) return;
+
+        ItemStack weapon = getActiveWeapon(player);
+        if (weapon == null) return;
+
+        long cooldownMs = 300;
+        if (ItemFactory.isGlock(weapon)) {
+            cooldownMs = 200;
+        } else if (ItemFactory.isPx4(weapon)) {
+            cooldownMs = 400;
+        }
+
+        long now = System.currentTimeMillis();
+        long last = lastShot.getOrDefault(player.getUniqueId(), 0L);
+        if (now - last < cooldownMs) return;
+
+        ItemMeta meta = weapon.getItemMeta();
+        if (meta == null) return;
+        
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+
+        byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+        if (hasMag != 1) {
+            playEmptySound(player);
+            lastShot.put(player.getUniqueId(), now);
+            return;
+        }
+
+        int ammo = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
+        if (ammo <= 0) {
+            playEmptySound(player);
+            lastShot.put(player.getUniqueId(), now);
+            return;
+        }
+
+        ammo--;
+        pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
+        
+        int maxCapacity = getMaxCapacity(weapon);
+        updateWeaponLore(meta, true, ammo, maxCapacity);
+        
+        weapon.setItemMeta(meta);
+        saveActiveWeapon(player, weapon);
+
+        lastShot.put(player.getUniqueId(), now);
+
+        fireEffectsAndDamage(player, weapon);
+    }
+
+    private void fireEffectsAndDamage(Player player, ItemStack weapon) {
+        Location eye = player.getEyeLocation();
+        Vector direction = eye.getDirection().normalize();
+
+        // 1. Suono sparo
+        player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
+
+        // 2. Scia visibile di fumo bianco
+        for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
+            Location point = eye.clone().add(direction.clone().multiply(d));
+            player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
+        }
+
+        // 3. RayTrace con tolleranza larga
+        RayTraceResult result = player.getWorld().rayTraceEntities(
+                eye,
+                direction,
+                MAX_DISTANCE,
+                2.0,
+                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
+        );
+
+        if (result == null || result.getHitEntity() == null) return;
+        if (!(result.getHitEntity() instanceof LivingEntity)) return;
+
+        LivingEntity target = (LivingEntity) result.getHitEntity();
+
+        double hitY = result.getHitPosition().getY();
+        double headY = target.getEyeLocation().getY();
+        boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
+
+        double damage;
+        if (ItemFactory.isPx4(weapon)) {
+            damage = headshot ? 3.2 : 2.5;
+        } else if (ItemFactory.isBeretta(weapon)) {
+            damage = headshot ? 2.5 : 1.8;
+        } else {
+            damage = headshot ? 1.8 : 1.2;
+        }
+
+        // 4. Applicazione danno con ritardo per bypassare i blocchi di Spigot
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (target.isValid() && !target.isDead()) {
+                    target.setNoDamageTicks(0);
+                    target.damage(damage, player);
+                }
+            }
+        }.runTaskLater(plugin, 1L);
+    }
+
+    private void playEmptySound(Player player) {
+        player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
+    }
+
+    // ---------------------------------------------------------------
+    // CARICATORE: INSERIMENTO / ESPULSIONE
+    // ---------------------------------------------------------------
+
+    private void toggleMagazine(Player player, ItemStack weapon) {
+        ItemMeta meta = weapon.getItemMeta();
+        if (meta == null) return;
+
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+
+        byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
+        int maxCapacity = getMaxCapacity(weapon);
+
+        if (hasMag == 1) {
+            int ammoLeft = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
+
+            pdc.set(Keys.HAS_MAG
