@@ -43,7 +43,7 @@ public class WeaponListener implements Listener {
     private final HashMap<UUID, BukkitTask> reloadTasks = new HashMap<>();
 
     private final Set<UUID> aimingPlayers = new HashSet<>();
-    private final HashMap<UUID, AimState> aimStates = new HashSet<>(); // Fix tipo se necessario o mantenuto come Map
+    private final HashMap<UUID, AimState> aimStatesMap = new HashMap<>();
 
     private static class AimState {
         final int slot;
@@ -54,8 +54,6 @@ public class WeaponListener implements Listener {
             this.originalOffhand = originalOffhand;
         }
     }
-
-    private final HashMap<UUID, AimState> aimStatesMap = new HashMap<>();
 
     public WeaponListener(JavaPlugin plugin, double defaultBodyDamage, double defaultHeadDamage) {
         this.plugin = plugin;
@@ -199,7 +197,7 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // GESTIONE INTERAZIONE E SPARO (SINISTRO PER SPARARE, DESTRO PER CARICATORE/RICARICA)
+    // GESTIONE INTERAZIONE E SPARO
     // ---------------------------------------------------------------
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -207,16 +205,13 @@ public class WeaponListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
-        // Se clicca sinistro (aria o blocco) mentre impugna l'arma o il mirino in ADS
         if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
             if (isHoldingWeaponOrSight(player)) {
                 event.setCancelled(true);
                 tryShoot(player);
             }
         } 
-        // Se clicca destro
         else if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            // Impedisce alla balestra vanilla di caricarsi
             if (isHoldingWeaponOrSight(player)) {
                 event.setCancelled(true);
             }
@@ -230,7 +225,6 @@ public class WeaponListener implements Listener {
         }
     }
 
-    // Intercetta l'attacco diretto a un'entità (es. click diretto sul mob)
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onAttack(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player)) return;
@@ -252,11 +246,10 @@ public class WeaponListener implements Listener {
     }
 
     // ---------------------------------------------------------------
-    // LOGICA DI SPARO E APPLICAZIONE DANNO CORRETTA
+    // LOGICA DI SPARO E APPLICAZIONE DANNO
     // ---------------------------------------------------------------
 
     private void tryShoot(Player player) {
-        // Obbligatorio essere accovacciati (Shift)
         if (!player.isSneaking()) return;
 
         ItemStack weapon = getActiveWeapon(player);
@@ -279,292 +272,4 @@ public class WeaponListener implements Listener {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
 
         byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
-        if (hasMag != 1) {
-            playEmptySound(player);
-            lastShot.put(player.getUniqueId(), now);
-            return;
-        }
-
-        int ammo = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
-        if (ammo <= 0) {
-            playEmptySound(player);
-            lastShot.put(player.getUniqueId(), now);
-            return;
-        }
-
-        ammo--;
-        pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
-        
-        int maxCapacity = getMaxCapacity(weapon);
-        updateWeaponLore(meta, true, ammo, maxCapacity);
-        
-        weapon.setItemMeta(meta);
-        saveActiveWeapon(player, weapon);
-
-        lastShot.put(player.getUniqueId(), now);
-
-        fireEffectsAndDamage(player, weapon);
-    }
-
-    private void fireEffectsAndDamage(Player player, ItemStack weapon) {
-        Location eye = player.getEyeLocation();
-        Vector direction = eye.getDirection().normalize();
-
-        // 1. Suono sparo
-        player.getWorld().playSound(eye, "bulletlow", 1.0f, 1.0f);
-
-        // 2. Scia visibile di fumo bianco
-        for (double d = 0.5; d <= MAX_DISTANCE; d += 0.5) {
-            Location point = eye.clone().add(direction.clone().multiply(d));
-            player.getWorld().spawnParticle(Particle.SMOKE_NORMAL, point, 1, 0.01, 0.01, 0.01, 0.0);
-        }
-
-        // 3. RayTrace ad alta precisione con tolleranza larga (2.0 blocchi) per agganciare qualsiasi entità
-        RayTraceResult result = player.getWorld().rayTraceEntities(
-                eye,
-                direction,
-                MAX_DISTANCE,
-                2.0,
-                entity -> entity instanceof LivingEntity && !entity.getUniqueId().equals(player.getUniqueId())
-        );
-
-        if (result == null || result.getHitEntity() == null) return;
-        if (!(result.getHitEntity() instanceof LivingEntity)) return;
-
-        LivingEntity target = (LivingEntity) result.getHitEntity();
-
-        double hitY = result.getHitPosition().getY();
-        double headY = target.getEyeLocation().getY();
-        boolean headshot = Math.abs(hitY - headY) <= HEADSHOT_THRESHOLD;
-
-        // Calcolo Danni precisi richiesti
-        double damage;
-        if (ItemFactory.isPx4(weapon)) {
-            damage = headshot ? 3.2 : 2.5;
-        } else if (ItemFactory.isBeretta(weapon)) {
-            damage = headshot ? 2.5 : 1.8;
-        } else {
-            // Glock
-            damage = headshot ? 1.8 : 1.2;
-        }
-
-        // 4. METODO INFALLIBILE PER FORZARE IL DANNO (2 Ticker di ritardo per bypassare il blocco di Spigot)
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (target.isValid() && !target.isDead()) {
-                    target.setNoDamageTicks(0);
-                    target.damage(damage, player);
-                }
-            }
-        }.runTaskLater(plugin, 1L);
-    }
-
-    private void playEmptySound(Player player) {
-        player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
-    }
-
-    // ---------------------------------------------------------------
-    // CARICATORE: INSERIMENTO / ESPULSIONE
-    // ---------------------------------------------------------------
-
-    private void toggleMagazine(Player player, ItemStack weapon) {
-        ItemMeta meta = weapon.getItemMeta();
-        if (meta == null) return;
-
-        PersistentDataContainer pdc = meta.getPersistentDataContainer();
-
-        byte hasMag = pdc.getOrDefault(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
-        int maxCapacity = getMaxCapacity(weapon);
-
-        if (hasMag == 1) {
-            int ammoLeft = pdc.getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
-
-            pdc.set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 0);
-            pdc.remove(Keys.MAG_AMMO);
-            updateWeaponLore(meta, false, 0, maxCapacity);
-            weapon.setItemMeta(meta);
-
-            ItemStack ejectedMag;
-            if (ItemFactory.isPx4(weapon)) {
-                ejectedMag = ItemFactory.createCaricatorePx4(ammoLeft);
-            } else if (ItemFactory.isBeretta(weapon)) {
-                ejectedMag = ItemFactory.createCaricatoreBeretta(ammoLeft);
-            } else {
-                ejectedMag = ItemFactory.createCaricatoreGlock(ammoLeft);
-            }
-            
-            giveOrDrop(player, ejectedMag);
-            player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
-
-        } else {
-            ItemStack offhand = player.getInventory().getItemInOffHand();
-
-            if (ItemFactory.isPx4(weapon) && !ItemFactory.isCaricatorePx4(offhand)) return;
-            if (ItemFactory.isBeretta(weapon) && !ItemFactory.isCaricatoreBeretta(offhand)) return;
-            if (ItemFactory.isGlock(weapon) && !ItemFactory.isCaricatoreGlock(offhand)) return;
-
-            int ammo = getMagAmmo(offhand);
-
-            pdc.set(Keys.HAS_MAG, PersistentDataType.BYTE, (byte) 1);
-            pdc.set(Keys.MAG_AMMO, PersistentDataType.INTEGER, ammo);
-            updateWeaponLore(meta, true, ammo, maxCapacity);
-            weapon.setItemMeta(meta);
-
-            consumeOneOffhand(player, offhand);
-            player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.0f);
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // CARICATORE: RICARICA GRADUALE
-    // ---------------------------------------------------------------
-
-    private void toggleReload(Player player) {
-        UUID id = player.getUniqueId();
-
-        if (reloadTasks.containsKey(id)) {
-            stopReload(id);
-            return;
-        }
-
-        int heldSlot = player.getInventory().getHeldItemSlot();
-        ItemStack magazine = player.getInventory().getItem(heldSlot);
-
-        if (!isAnyMagazine(magazine)) return;
-
-        int maxCapacity = getMaxCapacity(magazine);
-        int current = getMagAmmo(magazine);
-
-        if (current >= maxCapacity || !hasAnyAmmo(player)) return;
-
-        BukkitRunnable runnable = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!player.isOnline()) {
-                    reloadTasks.remove(id);
-                    cancel();
-                    return;
-                }
-
-                ItemStack currentItem = player.getInventory().getItem(heldSlot);
-                if (!isAnyMagazine(currentItem) || player.getInventory().getHeldItemSlot() != heldSlot) {
-                    reloadTasks.remove(id);
-                    cancel();
-                    return;
-                }
-
-                int ammoNow = getMagAmmo(currentItem);
-
-                if (ammoNow >= maxCapacity || !hasAnyAmmo(player)) {
-                    reloadTasks.remove(id);
-                    cancel();
-                    return;
-                }
-
-                consumeOneAmmoFromInventory(player);
-                int newAmmo = ammoNow + 1;
-
-                ItemMeta magMeta = currentItem.getItemMeta();
-                if (magMeta != null) {
-                    magMeta.getPersistentDataContainer().set(Keys.MAG_AMMO, PersistentDataType.INTEGER, newAmmo);
-                    updateMagazineLore(magMeta, newAmmo, maxCapacity);
-                    currentItem.setItemMeta(magMeta);
-                    player.getInventory().setItem(heldSlot, currentItem);
-                }
-
-                player.getWorld().playSound(player.getLocation(), "click", 1.0f, 1.2f);
-
-                if (newAmmo >= maxCapacity) {
-                    reloadTasks.remove(id);
-                    cancel();
-                }
-            }
-        };
-
-        BukkitTask task = runnable.runTaskTimer(plugin, RELOAD_INTERVAL_TICKS, RELOAD_INTERVAL_TICKS);
-        reloadTasks.put(id, task);
-    }
-
-    private void stopReload(UUID id) {
-        BukkitTask task = reloadTasks.remove(id);
-        if (task != null) {
-            task.cancel();
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // UTILITY
-    // ---------------------------------------------------------------
-
-    private boolean hasAnyAmmo(Player player) {
-        PlayerInventory inv = player.getInventory();
-        for (ItemStack it : inv.getStorageContents()) {
-            if (ItemFactory.isMunizioni9mm(it) && it.getAmount() > 0) return true;
-        }
-        ItemStack off = inv.getItemInOffHand();
-        return ItemFactory.isMunizioni9mm(off) && off.getAmount() > 0;
-    }
-
-    private void consumeOneAmmoFromInventory(Player player) {
-        PlayerInventory inv = player.getInventory();
-        ItemStack[] contents = inv.getStorageContents();
-
-        for (int i = 0; i < contents.length; i++) {
-            ItemStack it = contents[i];
-            if (ItemFactory.isMunizioni9mm(it) && it.getAmount() > 0) {
-                it.setAmount(it.getAmount() - 1);
-                contents[i] = it.getAmount() <= 0 ? null : it;
-                inv.setStorageContents(contents);
-                return;
-            }
-        }
-
-        ItemStack off = inv.getItemInOffHand();
-        if (ItemFactory.isMunizioni9mm(off) && off.getAmount() > 0) {
-            off.setAmount(off.getAmount() - 1);
-            inv.setItemInOffHand(off.getAmount() <= 0 ? null : off);
-        }
-    }
-
-    private int getMagAmmo(ItemStack magazine) {
-        if (magazine ==, null || magazine.getItemMeta() == null) return 0; // Nota: controlla se c'è una virgola di troppo, qui è pulito
-        if (magazine.getItemMeta() == null) return 0;
-        ItemMeta meta = magazine.getItemMeta();
-        return meta.getPersistentDataContainer().getOrDefault(Keys.MAG_AMMO, PersistentDataType.INTEGER, 0);
-    }
-
-    private void updateWeaponLore(ItemMeta meta, boolean hasMag, int ammo, int maxCapacity) {
-        List<String> lore = new ArrayList<>();
-        if (hasMag) {
-            lore.add("§7Caricatore: §b" + ammo + "/" + maxCapacity);
-        } else {
-            lore.add("§7Caricatore: §cNessuno");
-        }
-        meta.setLore(lore);
-    }
-
-    private void updateMagazineLore(ItemMeta meta, int ammo, int maxCapacity) {
-        List<String> lore = new ArrayList<>();
-        lore.add("§7Colpi: §f" + ammo + "/" + maxCapacity);
-        meta.setLore(lore);
-    }
-
-    private void consumeOneOffhand(Player player, ItemStack offhandItem) {
-        int remaining = offhandItem.getAmount() - 1;
-        if (remaining <= 0) {
-            player.getInventory().setItemInOffHand(null);
-        } else {
-            offhandItem.setAmount(remaining);
-            player.getInventory().setItemInOffHand(offhandItem);
-        }
-    }
-
-    private void giveOrDrop(Player player, ItemStack item) {
-        if (player.getInventory().firstEmpty() == -1) {
-            player.getWorld().dropItemNaturally(player.getLocation(), item);
-        } else {
-            player.getInventory().addItem(item);
-        }
-    }
-}
+        if (hasMag != 1)
